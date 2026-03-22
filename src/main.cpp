@@ -157,7 +157,7 @@ Profile getActiveProfile() {
 
 // --- Body Composition Calculation ---
 // Uses impedance-based formulas when BIA data available, falls back to BMI-based
-// Sources: Lukaski (FFM from BIA), Deurenberg (body fat from BMI), Mifflin-St Jeor (BMR)
+// Sources: Kushner/Schoeller (FFM from BIA, adjusted for foot-to-foot), Owen (BMR), Broca (ideal weight)
 
 void calculateBodyComposition(float weight, const char* time) {
     Profile prof = getActiveProfile();
@@ -180,36 +180,40 @@ void calculateBodyComposition(float weight, const char* time) {
     float heightM = heightCm / 100.0f;
     bool male = (gender == 0);
 
-    // BMI
+    // BMI = weight / height²
     bodyData.bmi = weight / (heightM * heightM);
 
-    // Ideal weight (BMI 22) — always calculable
-    bodyData.idealWeight = 22.0f * heightM * heightM;
+    // Ideal weight — modified Broca: male (H-80)*0.7, female (H-70)*0.6
+    if (male) {
+        bodyData.idealWeight = (heightCm - 80) * 0.7f;
+    } else {
+        bodyData.idealWeight = (heightCm - 70) * 0.6f;
+    }
     bodyData.weightControl = weight - bodyData.idealWeight;
 
-    // BMR — Mifflin-St Jeor — always calculable
+    // BMR — Owen (1986): male 879+10.2*W, female 795+7.18*W
     if (male) {
-        bodyData.bmr = 10.0f * weight + 6.25f * heightCm - 5.0f * age + 5;
+        bodyData.bmr = 879.0f + 10.2f * weight;
     } else {
-        bodyData.bmr = 10.0f * weight + 6.25f * heightCm - 5.0f * age - 161;
+        bodyData.bmr = 795.0f + 7.18f * weight;
     }
 
-    // Metabolic age — always calculable
+    // Metabolic age — offset from actual age based on BMR vs expected BMR at ideal weight
     float expectedBmr;
     if (male) {
-        expectedBmr = 10.0f * bodyData.idealWeight + 6.25f * heightCm - 5.0f * age + 5;
+        expectedBmr = 879.0f + 10.2f * bodyData.idealWeight;
     } else {
-        expectedBmr = 10.0f * bodyData.idealWeight + 6.25f * heightCm - 5.0f * age - 161;
+        expectedBmr = 795.0f + 7.18f * bodyData.idealWeight;
     }
-    bodyData.metabolicAge = age + (int)((bodyData.bmr - expectedBmr) / 50.0f);
+    bodyData.metabolicAge = age + (int)((bodyData.bmr - expectedBmr) / 85.0f);
     if (bodyData.metabolicAge < 12) bodyData.metabolicAge = 12;
     if (bodyData.metabolicAge > 90) bodyData.metabolicAge = 90;
 
-    // Visceral fat index — BMI-based, always calculable
+    // Visceral fat index — empirical BMI-based regression, clamped 1-30
     if (male) {
-        bodyData.visceralFat = (int)(bodyData.bmi * 0.68f - 8.0f);
+        bodyData.visceralFat = (int)(bodyData.bmi * 0.68f - 7.2f);
     } else {
-        bodyData.visceralFat = (int)(bodyData.bmi * 0.58f - 5.0f);
+        bodyData.visceralFat = (int)(bodyData.bmi * 0.58f - 4.2f);
     }
     if (bodyData.visceralFat < 1) bodyData.visceralFat = 1;
     if (bodyData.visceralFat > 30) bodyData.visceralFat = 30;
@@ -217,26 +221,27 @@ void calculateBodyComposition(float weight, const char* time) {
     // --- BIA-dependent values (require valid impedance) ---
     if (impedance > 0) {
         bodyData.biaValid = true;
-        // Impedance-based fat-free mass (Kushner/Schoeller)
+        // Fat-free mass — Kushner/Schoeller with adjusted H²/Z coefficient for foot-to-foot BIA
+        // FFM = a * (H²/Z) + b * W + c, where H in cm, Z in ohms
         float h2z = (float)(heightCm * heightCm) / impedance;
         if (male) {
-            bodyData.fatFreeWeight = 0.485f * h2z + 0.338f * weight + 5.32f;
+            bodyData.fatFreeWeight = 0.600f * h2z + 0.338f * weight + 5.32f;
         } else {
-            bodyData.fatFreeWeight = 0.476f * h2z + 0.295f * weight + 5.49f;
+            bodyData.fatFreeWeight = 0.589f * h2z + 0.295f * weight + 5.49f;
         }
         if (bodyData.fatFreeWeight > weight) bodyData.fatFreeWeight = weight * 0.95f;
         bodyData.fatMass = weight - bodyData.fatFreeWeight;
         bodyData.bodyFatPct = bodyData.fatMass / weight * 100.0f;
         if (bodyData.bodyFatPct < 3.0f) bodyData.bodyFatPct = 3.0f;
 
-        // Derived from fat-free mass
-        bodyData.muscleMass = bodyData.fatFreeWeight * 0.90f;
+        // Derived from fat-free mass using fixed tissue ratios
+        bodyData.muscleMass = bodyData.fatFreeWeight * 0.90f;   // 90% of FFM
         bodyData.musclePct = bodyData.muscleMass / weight * 100.0f;
-        bodyData.boneMass = bodyData.fatFreeWeight * 0.045f;
-        bodyData.proteinMass = bodyData.fatFreeWeight * 0.23f;
+        bodyData.boneMass = bodyData.fatFreeWeight * 0.046f;    // 4.6% of FFM
+        bodyData.proteinMass = bodyData.fatFreeWeight * 0.231f; // 23.1% of FFM
         bodyData.proteinPct = bodyData.proteinMass / weight * 100.0f;
-        bodyData.waterPct = bodyData.fatFreeWeight * 73.0f / weight;
-        bodyData.subcutFatPct = bodyData.bodyFatPct - bodyData.visceralFat * 0.4f;
+        bodyData.waterPct = bodyData.fatFreeWeight * 72.4f / weight; // 72.4% of FFM
+        bodyData.subcutFatPct = bodyData.bodyFatPct - bodyData.visceralFat * 0.21f;
         if (bodyData.subcutFatPct < 1.0f) bodyData.subcutFatPct = 1.0f;
 
         Serial.printf("  Using BIA impedance: %d ohms\n", impedance);

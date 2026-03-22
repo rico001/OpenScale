@@ -2,6 +2,10 @@
 
 ESP32-based bridge that reads weight data from a Bluetooth (BLE) body composition scale and makes it available via a local web interface, MQTT, and HTTP webhooks.
 
+| Home | Settings | Settings |
+|------|----------|----------|
+| ![Home Page](resources/home.png) | ![Settings Page](resources/settings.png) | ![Settings Page 2](resources/settings_2.png) |
+
 ## Supported Hardware
 
 - **Microcontroller**: ESP32-WROOM-32 (any ESP32 dev board)
@@ -23,8 +27,9 @@ OpenTrackFit works with BLE body composition scales that use the **ElinkThings/S
 ## Features
 
 - Automatic BLE connection to scale when someone steps on it
-- Last measurement displayed on a responsive web page with body composition tiles
-- **Body composition analysis**: BMI, body fat %, muscle mass, water %, bone mass, BMR, protein %, metabolic age, visceral fat, and more — calculated from weight + user profile
+- Last measurement displayed on a responsive web page with body composition tiles and toast notification on update
+- **Body composition analysis**: BMI, body fat %, muscle mass, water %, bone mass, BMR, protein %, metabolic age, visceral fat, and more — calculated from weight + impedance + user profile
+- **BIA impedance detection**: Automatic barefoot/socks detection — full body analysis when barefoot, basic metrics when wearing socks
 - **Multi-profile support**: Create up to 8 user profiles (name, gender, age, height) — active profile shown on home page
 - WiFi configuration via captive portal with SSID scan (no hardcoded credentials)
 - MQTT publishing of full body composition data to any broker
@@ -34,6 +39,10 @@ OpenTrackFit works with BLE body composition scales that use the **ElinkThings/S
 - NTP time sync (CET/CEST timezone)
 - Auto-reconnect after scale powers off
 - mDNS support (`http://opentrackfit.local`)
+
+## Architecture
+
+![Architecture](resources/architecture.svg)
 
 ## Getting Started
 
@@ -69,12 +78,11 @@ pio device monitor
 ### Usage
 
 1. Open `http://opentrackfit.local` (or the IP shown in the serial log)
-2. Step on the scale — the weight measurement begins automatically
-3. The final weight and timestamp are displayed after the measurement stabilizes
+2. Step on the scale **barefoot** — the weight measurement begins automatically
+3. The final weight, body composition, and timestamp are displayed after the measurement stabilizes
+4. A toast notification appears when new data arrives
 
-| Home | Settings |
-|------|----------|
-| ![Home Page](resources/home.png) | ![Settings Page](resources/settings.png) |
+> **Tip**: For full body composition analysis (body fat, muscle mass, water, etc.), step on the scale barefoot. With socks, only basic metrics (BMI, BMR, metabolic age) are available.
 
 ### Settings
 
@@ -93,28 +101,30 @@ Navigate to `/setup` to configure:
 | `GET /api/settings` | Current settings and profiles |
 | `GET /api/docs` | API documentation |
 
-Example response:
+Example response (barefoot measurement):
 ```json
 {
   "weight": 102.1,
-  "time": "22.03.2026 18:37",
+  "time": "22.03.2026 20:30:45",
   "profile": "Peter",
-  "bmi": 26.9,
-  "body_fat_pct": 24.3,
-  "muscle_pct": 68.1,
-  "water_pct": 55.3,
-  "bone_mass": 3.5,
-  "bmr": 2064,
-  "protein_pct": 17.4,
+  "impedance": 592,
+  "body_analysis": true,
+  "bmi": 28.3,
+  "bmr": 2038,
   "metabolic_age": 39,
-  "visceral_fat": 10,
-  "subcutaneous_fat_pct": 20.3,
-  "ideal_weight": 83.7,
-  "weight_control": 18.4,
-  "fat_mass": 24.8,
-  "fat_free_weight": 77.3,
-  "muscle_mass": 69.6,
-  "protein_mass": 17.8
+  "visceral_fat": 11,
+  "ideal_weight": 79.4,
+  "weight_control": 22.7,
+  "body_fat_pct": 32.0,
+  "muscle_pct": 61.2,
+  "water_pct": 49.6,
+  "bone_mass": 3.1,
+  "protein_pct": 15.6,
+  "protein_mass": 16.0,
+  "subcutaneous_fat_pct": 27.6,
+  "fat_mass": 32.7,
+  "fat_free_weight": 69.4,
+  "muscle_mass": 62.5
 }
 ```
 
@@ -129,10 +139,27 @@ mDNS:  http://opentrackfit.local
 FitTrack found!
 Connecting to 03:b3:ec:c1:cf:24...
 Connected. Waiting for measurement...
-
-  Measuring: 102.6 kg
-  Measuring: 102.7 kg
->>> FINAL WEIGHT: 102.7 kg <<<
+..................
+>>> FINAL WEIGHT: 102.1 kg <<<
+>>> IMPEDANCE: 592 ohms <<<
+  Using BIA impedance: 592 ohms
+--- Body Composition ---
+  Impedance:      592 ohms
+  BMI:            28.3
+  Body Fat:       32.0 %
+  Muscle:         61.2 % (62.5 kg)
+  Water:          49.6 %
+  Bone Mass:      3.1 kg
+  BMR:            2038 kcal
+  Protein:        15.6 % (16.0 kg)
+  Metabolic Age:  39
+  Visceral Fat:   11
+  Subcut. Fat:    27.6 %
+  Fat Mass:       32.7 kg
+  Fat-Free:       69.4 kg
+  Ideal Weight:   79.4 kg
+  Weight Control: 22.7 kg
+------------------------
 MQTT published to opentrackfit/weight
 HTTP POST https://example.com/webhook -> 200
 >> Scale disconnected. Rescanning...

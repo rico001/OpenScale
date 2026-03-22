@@ -23,12 +23,14 @@ OpenTrackFit works with BLE body composition scales that use the **ElinkThings/S
 ## Features
 
 - Automatic BLE connection to scale when someone steps on it
-- Last measurement displayed on a responsive web page (mobile + desktop)
+- Last measurement displayed on a responsive web page with body composition tiles
+- **Body composition analysis**: BMI, body fat %, muscle mass, water %, bone mass, BMR, protein %, metabolic age, visceral fat, and more — calculated from weight + user profile
+- **Multi-profile support**: Create up to 8 user profiles (name, gender, age, height) — active profile shown on home page
 - WiFi configuration via captive portal with SSID scan (no hardcoded credentials)
-- MQTT publishing of weight data to any broker
-- HTTP POST webhook forwarding
-- Settings page for WiFi, MQTT, and HTTP webhook configuration (separate save per section)
-- REST API for external systems to poll weight data
+- MQTT publishing of full body composition data to any broker
+- HTTP POST webhook forwarding with all measurement data
+- Settings page for profiles, WiFi, MQTT, and HTTP webhook configuration
+- REST API for external systems to poll measurement data
 - NTP time sync (CET/CEST timezone)
 - Auto-reconnect after scale powers off
 - mDNS support (`http://opentrackfit.local`)
@@ -72,12 +74,13 @@ pio device monitor
 
 | Home | Settings |
 |------|----------|
-| ![Home Page](resources/esp-page-data.png) | ![Settings Page](resources/esp-page-settings.png) |
+| ![Home Page](resources/home.png) | ![Settings Page](resources/settings.png) |
 
 ### Settings
 
 Navigate to `/setup` to configure:
 
+- **Profile** — User profiles with name, gender, age, height (select active profile)
 - **WLAN** — WiFi credentials (triggers reconnect)
 - **MQTT** — Broker, port, topic, user/password (saved inline, no reconnect)
 - **HTTP Webhook** — POST URL for weight data forwarding (saved inline)
@@ -86,12 +89,33 @@ Navigate to `/setup` to configure:
 
 | Endpoint | Description |
 |----------|-------------|
-| `GET /api/last-weight-data` | Last measurement (JSON: `weight`, `time`) |
+| `GET /api/last-weight-data` | Last measurement with body composition (JSON) |
+| `GET /api/settings` | Current settings and profiles |
 | `GET /api/docs` | API documentation |
 
 Example response:
 ```json
-{"weight": 102.7, "time": "22.03.2026 15:34"}
+{
+  "weight": 102.1,
+  "time": "22.03.2026 18:37",
+  "profile": "Peter",
+  "bmi": 26.9,
+  "body_fat_pct": 24.3,
+  "muscle_pct": 68.1,
+  "water_pct": 55.3,
+  "bone_mass": 3.5,
+  "bmr": 2064,
+  "protein_pct": 17.4,
+  "metabolic_age": 39,
+  "visceral_fat": 10,
+  "subcutaneous_fat_pct": 20.3,
+  "ideal_weight": 83.7,
+  "weight_control": 18.4,
+  "fat_mass": 24.8,
+  "fat_free_weight": 77.3,
+  "muscle_mass": 69.6,
+  "protein_mass": 17.8
+}
 ```
 
 ## Serial Output
@@ -122,12 +146,6 @@ HTTP POST https://example.com/webhook -> 200
 | Saved WiFi available | Connects to WiFi (STA mode) |
 | WiFi lost for >60 seconds | Falls back to AP mode for 5 minutes |
 | AP mode timeout (5 min) | Retries saved WiFi credentials |
-
-## Roadmap
-
-- [ ] Weight history / trend tracking
-- [ ] Multi-user support
-- [ ] Body composition data parsing (fat %, muscle mass, etc.)
 
 ## Development
 

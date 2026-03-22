@@ -442,17 +442,27 @@ const char CONFIG_PAGE[] PROGMEM = R"rawliteral(
 var loader=document.getElementById('loader');
 var content=document.getElementById('content');
 var pending=0;
-function busy(){pending++;loader.style.display='';loader.style.padding='20px 0';}
-function done(){pending--;if(pending<=0){pending=0;loader.style.display='none';content.style.display='';}}
+var initialized=false;
+function busy(){
+  pending++;
+  loader.style.display='flex';
+  loader.style.padding=initialized?'12px 0':'80px 0';
+}
+function done(){
+  pending--;
+  if(pending<=0){
+    pending=0;
+    loader.style.display='none';
+    content.style.display='block';
+    initialized=true;
+  }
+}
 function api(url,opts){
   busy();
   return fetch(url,opts).then(r=>r.json()).finally(done);
 }
 // Initial load: scan + settings in parallel
-var ready=0;
-function initDone(){ready++;if(ready>=2){loader.style.display='none';content.style.display='';}}
-busy();busy();
-fetch('/api/scan').then(r=>r.json()).then(d=>{
+api('/api/scan').then(d=>{
   var sel=document.getElementById('ssid');
   var inp=document.getElementById('ssid_manual');
   var st=document.getElementById('scan-status');
@@ -480,7 +490,7 @@ fetch('/api/scan').then(r=>r.json()).then(d=>{
 }).catch(()=>{
   document.getElementById('scan-status').textContent='Scan fehlgeschlagen';
   document.getElementById('ssid_manual').required=true;
-}).finally(done);
+});
 function loadSettings(){
   api('/api/settings').then(d=>{
     if(d.mqtt_broker) document.getElementById('mqtt_broker').value=d.mqtt_broker;
@@ -595,8 +605,8 @@ const char WEIGHT_PAGE[] PROGMEM = R"rawliteral(
   <div class="tile"><div class="label">Fettmasse</div><div class="val" id="t_fatmass">-</div><div class="unit">kg</div></div>
   <div class="tile"><div class="label">Fettfrei</div><div class="val" id="t_ffm">-</div><div class="unit">kg</div></div>
   <div class="tile"><div class="label">Muskelmasse</div><div class="val" id="t_musclekg">-</div><div class="unit">kg</div></div>
-  <div class="tile"><div class="label">Proteinmasse</div><div class="val" id="t_proteinkg">-</div><div class="unit">kg</div></div>
 </div>
+<div id="no-profile" style="display:none;color:#888;font-size:14px;margin:20px 0;text-align:center">Profil in <a href="/setup" style="color:#4CAF50">Einstellungen</a> anlegen fuer Koerperanalyse</div>
 <div class="settings"><a href="/setup">Einstellungen</a></div>
 <script>
 function f1(v){return v.toFixed(1)}
@@ -607,7 +617,8 @@ function load(){
       document.getElementById('weight').textContent=f1(d.weight);
       document.getElementById('meta').textContent=d.time?'Letzte Messung: '+d.time:'Letzte Messung';
       if(d.bmi){
-        document.getElementById('tiles').style.display='';
+        document.getElementById('tiles').style.display='grid';
+        document.getElementById('no-profile').style.display='none';
         document.getElementById('t_bmi').textContent=f1(d.bmi);
         document.getElementById('t_fat').textContent=f1(d.body_fat_pct);
         document.getElementById('t_muscle').textContent=f1(d.muscle_pct);
@@ -623,7 +634,8 @@ function load(){
         document.getElementById('t_fatmass').textContent=f1(d.fat_mass);
         document.getElementById('t_ffm').textContent=f1(d.fat_free_weight);
         document.getElementById('t_musclekg').textContent=f1(d.muscle_mass);
-        document.getElementById('t_proteinkg').textContent=f1(d.protein_mass);
+      } else {
+        document.getElementById('no-profile').style.display='block';
       }
     }
   }).catch(()=>{});

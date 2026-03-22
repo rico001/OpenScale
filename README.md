@@ -5,8 +5,20 @@ ESP32-based bridge that reads weight data from a Bluetooth (BLE) body compositio
 ## Supported Hardware
 
 - **Microcontroller**: ESP32-WROOM-32 (any ESP32 dev board)
-- **Scale**: FitTrack Body Composition Smart Scale (Model: FT-DARA-WH01-GL)
-  - Other scales advertising as "FitTrack" with BLE service `0xFFB0` should also work
+
+### Compatible Scales
+
+OpenTrackFit works with BLE body composition scales that use the **ElinkThings/SWAN platform** (BLE service `0xFFB0`). Many affordable smart scales from different brands share this common hardware and protocol — they are manufactured by the same OEM in China and sold under various names.
+
+**Tested:**
+- FitTrack Dara (Model: FT-DARA-WH01-GL) — BLE chip: Dialog Semi DA14531
+
+**Expected to work** (same platform, untested):
+- GAIAM Smart Weight Scale
+- MGB / Icomon scales (SWAN protocol)
+- Other scales advertising as `"FitTrack"` via BLE
+
+> If your scale uses BLE service `0xFFB0` with characteristics `FFB1`/`FFB2`/`FFB3`, it likely works. You may need to adjust the `SCALE_NAME` constant in `src/main.cpp` to match your scale's BLE advertised name.
 
 ## Features
 

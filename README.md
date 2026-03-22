@@ -80,9 +80,9 @@ pio device monitor
 
 > **Tip**: For full body composition analysis (body fat, muscle mass, water, etc.), step on the scale barefoot. With socks, only basic metrics (BMI, BMR, metabolic age) are available.
 
-| Home | Settings |
-|------|----------|
-| ![Home Page](resources/home.png) | ![Settings Page](resources/settings.png) |
+| Home | Settings | Settings |
+|------|----------|----------|
+| ![Home Page](resources/home.png) | ![Settings Page](resources/settings.png) | ![Settings Page 2](resources/settings_2.png) |
 
 ### Settings
 

@@ -1,6 +1,6 @@
 # OpenTrackFit
 
-ESP32-based bridge that reads weight data from a Bluetooth (BLE) body composition scale and makes it available via a local web interface.
+ESP32-based bridge that reads weight data from a Bluetooth (BLE) body composition scale and makes it available via a local web interface, MQTT, and HTTP webhooks.
 
 ## Supported Hardware
 
@@ -11,8 +11,13 @@ ESP32-based bridge that reads weight data from a Bluetooth (BLE) body compositio
 ## Features
 
 - Automatic BLE connection to scale when someone steps on it
-- Live weight display on a web page in your local network
-- WiFi configuration via captive portal (no hardcoded credentials)
+- Last measurement displayed on a responsive web page (mobile + desktop)
+- WiFi configuration via captive portal with SSID scan (no hardcoded credentials)
+- MQTT publishing of weight data to any broker
+- HTTP POST webhook forwarding
+- Settings page for WiFi, MQTT, and HTTP webhook configuration (separate save per section)
+- REST API for external systems to poll weight data
+- NTP time sync (CET/CEST timezone)
 - Auto-reconnect after scale powers off
 - mDNS support (`http://opentrackfit.local`)
 
@@ -29,29 +34,56 @@ ESP32-based bridge that reads weight data from a Bluetooth (BLE) body compositio
 pio run -t upload
 ```
 
+### Serial Monitor
+
+```bash
+pio device monitor
+```
+
+> **Note**: Close the serial monitor before flashing, otherwise the upload will fail.
+
 ### Initial WiFi Setup
 
 1. On first boot, the ESP32 creates a WiFi access point:
    - **SSID**: `OpenTrackFit`
    - **Password**: `12345678`
 2. Connect to the AP and open `http://192.168.4.1`
-3. Select your home WiFi network and enter the password
+3. Select your home WiFi network from the scan list (or enter manually) and enter the password
 4. The ESP32 tests the connection and shows success or failure
 5. On success, the ESP32 restarts and joins your network
 
 ### Usage
 
 1. Open `http://opentrackfit.local` (or the IP shown in the serial log)
-2. Step on the scale — the live weight appears on the page
-3. The final weight is displayed after the measurement stabilizes
+2. Step on the scale — the weight measurement begins automatically
+3. The final weight and timestamp are displayed after the measurement stabilizes
 
-## Serial Monitor
+| Home | Settings |
+|------|----------|
+| ![Home Page](resources/esp-page-data.png) | ![Settings Page](resources/esp-page-settings.png) |
 
-```bash
-pio device monitor
+### Settings
+
+Navigate to `/setup` to configure:
+
+- **WLAN** — WiFi credentials (triggers reconnect)
+- **MQTT** — Broker, port, topic, user/password (saved inline, no reconnect)
+- **HTTP Webhook** — POST URL for weight data forwarding (saved inline)
+
+### REST API
+
+| Endpoint | Description |
+|----------|-------------|
+| `GET /api/last-weight-data` | Last measurement (JSON: `weight`, `time`) |
+| `GET /api/docs` | API documentation |
+
+Example response:
+```json
+{"weight": 102.7, "time": "22.03.2026 15:34"}
 ```
 
-Example output:
+## Serial Output
+
 ```
 === OpenTrackFit ===
 Mode:  LAN (Station)
@@ -65,6 +97,8 @@ Connected. Waiting for measurement...
   Measuring: 102.6 kg
   Measuring: 102.7 kg
 >>> FINAL WEIGHT: 102.7 kg <<<
+MQTT published to opentrackfit/weight
+HTTP POST https://example.com/webhook -> 200
 >> Scale disconnected. Rescanning...
 ```
 
@@ -79,11 +113,13 @@ Connected. Waiting for measurement...
 
 ## Roadmap
 
-- [ ] MQTT publishing of weight data
-- [ ] HTTP POST callback to external services
 - [ ] Weight history / trend tracking
 - [ ] Multi-user support
 - [ ] Body composition data parsing (fat %, muscle mass, etc.)
+
+## Development
+
+This project was predominantly built using [Claude Code](https://claude.ai/claude-code) (AI-assisted development).
 
 ## License
 

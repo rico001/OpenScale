@@ -36,6 +36,10 @@ OpenTrackFit works with BLE body composition scales that use the **ElinkThings/S
 - Auto-reconnect after scale powers off
 - mDNS support (`http://opentrackfit.local`)
 
+## Architecture
+
+![Architecture](resources/architecture.svg)
+
 ## Getting Started
 
 ### Prerequisites

@@ -429,27 +429,73 @@ const char WEIGHT_PAGE[] PROGMEM = R"rawliteral(
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>OpenTrackFit</title>
 <style>
-  body{font-family:sans-serif;max-width:600px;margin:0 auto;padding:60px 20px;background:#111;color:#eee;text-align:center}
-  h1{color:#4CAF50;margin-bottom:0;font-size:clamp(24px,4vw,36px)}
-  .weight{font-size:clamp(64px,12vw,120px);font-weight:bold;margin:50px 0 10px;color:#4CAF50}
-  .unit{font-size:clamp(24px,4vw,36px);color:#888}
-  .status{font-size:clamp(14px,2vw,18px);color:#888;margin-top:20px}
-  .settings{margin-top:50px}
+  *{box-sizing:border-box}
+  body{font-family:sans-serif;max-width:600px;margin:0 auto;padding:30px 16px;background:#111;color:#eee;text-align:center}
+  h1{color:#4CAF50;margin-bottom:0;font-size:clamp(22px,4vw,32px)}
+  .hero{margin:40px 0 10px}
+  .hero .val{font-size:clamp(72px,15vw,130px);font-weight:bold;color:#4CAF50;line-height:1}
+  .hero .unit{font-size:clamp(24px,4vw,36px);color:#888}
+  .meta{font-size:clamp(13px,1.8vw,16px);color:#888;margin-bottom:30px}
+  .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:24px}
+  .tile{background:#1a1a1a;border-radius:10px;padding:14px 8px}
+  .tile .label{font-size:clamp(10px,1.3vw,12px);color:#888;margin-bottom:6px}
+  .tile .val{font-size:clamp(20px,3.5vw,28px);font-weight:bold;color:#4CAF50}
+  .tile .unit{font-size:clamp(10px,1.3vw,13px);color:#666}
+  .settings{margin-top:30px}
   .settings a{color:#888;font-size:clamp(13px,1.5vw,16px)}
+  .no-profile{color:#888;font-size:14px;margin:20px 0}
 </style>
 </head><body>
 <h1>OpenTrackFit</h1>
-<div class="weight"><span id="weight">--.-</span> <span class="unit">kg</span></div>
-<div class="status" id="status">Noch keine Messung</div>
-<div class="status" id="time"></div>
-<div class="settings"><a href="/setup">Netzwerkeinstellungen</a></div>
+<div class="hero">
+  <span class="val" id="weight">--.-</span> <span class="unit">kg</span>
+</div>
+<div class="meta" id="meta">Noch keine Messung</div>
+<div class="grid" id="tiles" style="display:none">
+  <div class="tile"><div class="label">BMI</div><div class="val" id="t_bmi">-</div></div>
+  <div class="tile"><div class="label">Koerperfett</div><div class="val" id="t_fat">-</div><div class="unit">%</div></div>
+  <div class="tile"><div class="label">Muskelanteil</div><div class="val" id="t_muscle">-</div><div class="unit">%</div></div>
+  <div class="tile"><div class="label">Koerperwasser</div><div class="val" id="t_water">-</div><div class="unit">%</div></div>
+  <div class="tile"><div class="label">Knochenmasse</div><div class="val" id="t_bone">-</div><div class="unit">kg</div></div>
+  <div class="tile"><div class="label">Grundumsatz</div><div class="val" id="t_bmr">-</div><div class="unit">kcal</div></div>
+  <div class="tile"><div class="label">Protein</div><div class="val" id="t_protein">-</div><div class="unit">%</div></div>
+  <div class="tile"><div class="label">Stoffw.-Alter</div><div class="val" id="t_age">-</div></div>
+  <div class="tile"><div class="label">Viszeralfett</div><div class="val" id="t_visceral">-</div></div>
+  <div class="tile"><div class="label">Subkutan. Fett</div><div class="val" id="t_subcut">-</div><div class="unit">%</div></div>
+  <div class="tile"><div class="label">Idealgewicht</div><div class="val" id="t_ideal">-</div><div class="unit">kg</div></div>
+  <div class="tile"><div class="label">Differenz</div><div class="val" id="t_control">-</div><div class="unit">kg</div></div>
+  <div class="tile"><div class="label">Fettmasse</div><div class="val" id="t_fatmass">-</div><div class="unit">kg</div></div>
+  <div class="tile"><div class="label">Fettfrei</div><div class="val" id="t_ffm">-</div><div class="unit">kg</div></div>
+  <div class="tile"><div class="label">Muskelmasse</div><div class="val" id="t_musclekg">-</div><div class="unit">kg</div></div>
+  <div class="tile"><div class="label">Proteinmasse</div><div class="val" id="t_proteinkg">-</div><div class="unit">kg</div></div>
+</div>
+<div class="settings"><a href="/setup">Einstellungen</a></div>
 <script>
+function f1(v){return v.toFixed(1)}
 function load(){
   fetch('/api/last-weight-data').then(r=>r.json()).then(d=>{
     if(d.weight>0){
-      document.getElementById('weight').textContent=d.weight.toFixed(1);
-      document.getElementById('status').textContent='Letzte Messung';
-      if(d.time) document.getElementById('time').textContent=d.time;
+      document.getElementById('weight').textContent=f1(d.weight);
+      document.getElementById('meta').textContent=d.time?'Letzte Messung: '+d.time:'Letzte Messung';
+      if(d.bmi){
+        document.getElementById('tiles').style.display='';
+        document.getElementById('t_bmi').textContent=f1(d.bmi);
+        document.getElementById('t_fat').textContent=f1(d.body_fat_pct);
+        document.getElementById('t_muscle').textContent=f1(d.muscle_pct);
+        document.getElementById('t_water').textContent=f1(d.water_pct);
+        document.getElementById('t_bone').textContent=f1(d.bone_mass);
+        document.getElementById('t_bmr').textContent=d.bmr;
+        document.getElementById('t_protein').textContent=f1(d.protein_pct);
+        document.getElementById('t_age').textContent=d.metabolic_age;
+        document.getElementById('t_visceral').textContent=d.visceral_fat;
+        document.getElementById('t_subcut').textContent=f1(d.subcutaneous_fat_pct);
+        document.getElementById('t_ideal').textContent=f1(d.ideal_weight);
+        document.getElementById('t_control').textContent=(d.weight_control>0?'+':'')+f1(d.weight_control);
+        document.getElementById('t_fatmass').textContent=f1(d.fat_mass);
+        document.getElementById('t_ffm').textContent=f1(d.fat_free_weight);
+        document.getElementById('t_musclekg').textContent=f1(d.muscle_mass);
+        document.getElementById('t_proteinkg').textContent=f1(d.protein_mass);
+      }
     }
   }).catch(()=>{});
 }

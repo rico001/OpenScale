@@ -6,6 +6,8 @@
 #include <WebServer.h>
 #include <Preferences.h>
 #include <ESPmDNS.h>
+#include <PubSubClient.h>
+#include <HTTPClient.h>
 
 // --- Config ---
 #define SCALE_NAME      "FitTrack"
@@ -32,15 +34,86 @@ volatile bool connected = false;
 bool doConnect = false;
 bool scanning = false;
 
-
 WebServer server(80);
 Preferences prefs;
+WiFiClient wifiClient;
+PubSubClient mqttClient(wifiClient);
 Mode currentMode = MODE_BLE_ONLY;
 unsigned long apStartTime = 0;
 unsigned long wifiLostTime = 0;
 
 volatile float finalWeight = 0;
 char finalWeightTime[20] = "";
+
+// --- Preferences helpers ---
+
+String getPref(const char* ns, const char* key) {
+    prefs.begin(ns, true);
+    String v = prefs.getString(key, "");
+    prefs.end();
+    return v;
+}
+
+void setPref(const char* ns, const char* key, const String& val) {
+    prefs.begin(ns, false);
+    prefs.putString(key, val);
+    prefs.end();
+}
+
+uint16_t getPrefInt(const char* ns, const char* key, uint16_t def) {
+    prefs.begin(ns, true);
+    uint16_t v = prefs.getUShort(key, def);
+    prefs.end();
+    return v;
+}
+
+void setPrefInt(const char* ns, const char* key, uint16_t val) {
+    prefs.begin(ns, false);
+    prefs.putUShort(key, val);
+    prefs.end();
+}
+
+// --- MQTT & HTTP forwarding ---
+
+void forwardWeight(float weight, const char* time) {
+    String json = "{\"weight\":" + String(weight, 1) + ",\"time\":\"" + String(time) + "\"}";
+
+    // MQTT
+    String broker = getPref("mqtt", "broker");
+    if (!broker.isEmpty()) {
+        String topic = getPref("mqtt", "topic");
+        if (topic.isEmpty()) topic = "opentrackfit/weight";
+        uint16_t port = getPrefInt("mqtt", "port", 1883);
+        String user = getPref("mqtt", "user");
+        String pass = getPref("mqtt", "pass");
+
+        mqttClient.setServer(broker.c_str(), port);
+        bool ok;
+        if (!user.isEmpty()) {
+            ok = mqttClient.connect("OpenTrackFit", user.c_str(), pass.c_str());
+        } else {
+            ok = mqttClient.connect("OpenTrackFit");
+        }
+        if (ok) {
+            mqttClient.publish(topic.c_str(), json.c_str());
+            Serial.printf("MQTT published to %s\n", topic.c_str());
+            mqttClient.disconnect();
+        } else {
+            Serial.printf("MQTT connect failed (rc=%d)\n", mqttClient.state());
+        }
+    }
+
+    // HTTP Webhook
+    String webhook = getPref("http", "webhook");
+    if (!webhook.isEmpty() && WiFi.status() == WL_CONNECTED) {
+        HTTPClient http;
+        http.begin(webhook);
+        http.addHeader("Content-Type", "application/json");
+        int code = http.POST(json);
+        Serial.printf("HTTP POST %s -> %d\n", webhook.c_str(), code);
+        http.end();
+    }
+}
 
 // --- HTML ---
 
@@ -52,22 +125,44 @@ const char CONFIG_PAGE[] PROGMEM = R"rawliteral(
 <style>
   body{font-family:sans-serif;max-width:400px;margin:40px auto;padding:0 20px;background:#111;color:#eee}
   h1{color:#4CAF50}
+  h2{color:#ccc;font-size:16px;margin-top:30px;border-bottom:1px solid #333;padding-bottom:8px}
   input,select{width:100%;padding:12px;margin:8px 0;box-sizing:border-box;border-radius:6px;border:1px solid #555;background:#222;color:#eee;font-size:16px}
   button{width:100%;padding:14px;margin-top:16px;background:#4CAF50;color:#fff;border:none;border-radius:6px;font-size:18px;cursor:pointer}
   button:hover{background:#45a049}
   .info{color:#888;font-size:13px;margin-top:20px}
+  label{display:block;margin-top:10px;color:#aaa;font-size:14px}
 </style>
 </head><body>
 <h1>OpenTrackFit</h1>
+
 <form action="/save" method="POST">
-  <label>WLAN SSID</label>
+<h2>WLAN</h2>
+  <label>SSID</label>
   <select name="ssid" id="ssid" style="display:none"></select>
-  <input name="ssid_manual" id="ssid_manual" placeholder="Dein WLAN Name">
+  <input name="ssid_manual" id="ssid_manual" placeholder="WLAN Name">
   <div id="scan-status" class="info">Scanne WLANs...</div>
-  <label>WLAN Passwort</label>
-  <input name="pass" type="password" required placeholder="Passwort">
+  <label>Passwort</label>
+  <input name="pass" type="password" placeholder="WLAN Passwort">
+
+<h2>MQTT</h2>
+  <label>Broker</label>
+  <input name="mqtt_broker" id="mqtt_broker" placeholder="z.B. 192.168.178.50">
+  <label>Port</label>
+  <input name="mqtt_port" id="mqtt_port" placeholder="1883" type="number">
+  <label>Topic</label>
+  <input name="mqtt_topic" id="mqtt_topic" placeholder="opentrackfit/weight">
+  <label>Benutzer (optional)</label>
+  <input name="mqtt_user" id="mqtt_user" placeholder="Benutzername">
+  <label>Passwort (optional)</label>
+  <input name="mqtt_pass" id="mqtt_pass" type="password" placeholder="Passwort">
+
+<h2>HTTP Webhook</h2>
+  <label>POST URL</label>
+  <input name="http_webhook" id="http_webhook" placeholder="https://example.com/webhook">
+
   <button type="submit">Speichern & Verbinden</button>
 </form>
+
 <p class="info">AP schaltet sich nach 5 Minuten automatisch ab.</p>
 <script>
 fetch('/api/scan').then(r=>r.json()).then(d=>{
@@ -99,6 +194,13 @@ fetch('/api/scan').then(r=>r.json()).then(d=>{
   document.getElementById('scan-status').textContent='Scan fehlgeschlagen';
   document.getElementById('ssid_manual').required=true;
 });
+fetch('/api/settings').then(r=>r.json()).then(d=>{
+  if(d.mqtt_broker) document.getElementById('mqtt_broker').value=d.mqtt_broker;
+  if(d.mqtt_port) document.getElementById('mqtt_port').value=d.mqtt_port;
+  if(d.mqtt_topic) document.getElementById('mqtt_topic').value=d.mqtt_topic;
+  if(d.mqtt_user) document.getElementById('mqtt_user').value=d.mqtt_user;
+  if(d.http_webhook) document.getElementById('http_webhook').value=d.http_webhook;
+}).catch(()=>{});
 </script>
 </body></html>
 )rawliteral";
@@ -123,7 +225,7 @@ const char WEIGHT_PAGE[] PROGMEM = R"rawliteral(
 <div class="unit">kg</div>
 <div class="status" id="status">Noch keine Messung</div>
 <div class="status" id="time"></div>
-<div class="settings"><a href="/setup">WLAN Einstellungen</a></div>
+<div class="settings"><a href="/setup">Netzwerkeinstellungen</a></div>
 <script>
 function load(){
   fetch('/api/weight').then(r=>r.json()).then(d=>{
@@ -142,30 +244,9 @@ setInterval(load,5000);
 
 // --- WiFi ---
 
-String getSavedSSID() {
-    prefs.begin("wifi", true);
-    String s = prefs.getString("ssid", "");
-    prefs.end();
-    return s;
-}
-
-String getSavedPass() {
-    prefs.begin("wifi", true);
-    String p = prefs.getString("pass", "");
-    prefs.end();
-    return p;
-}
-
-void saveWiFiCredentials(const String& ssid, const String& pass) {
-    prefs.begin("wifi", false);
-    prefs.putString("ssid", ssid);
-    prefs.putString("pass", pass);
-    prefs.end();
-}
-
 bool connectWiFi() {
-    String ssid = getSavedSSID();
-    String pass = getSavedPass();
+    String ssid = getPref("wifi", "ssid");
+    String pass = getPref("wifi", "pass");
     if (ssid.isEmpty()) return false;
 
     Serial.printf("Connecting to WiFi: %s\n", ssid.c_str());
@@ -214,11 +295,25 @@ void handleSave() {
     if (ssid == "__manual__" || ssid.isEmpty()) ssid = server.arg("ssid_manual");
     String pass = server.arg("pass");
 
+    // Save MQTT settings
+    setPref("mqtt", "broker", server.arg("mqtt_broker"));
+    String port = server.arg("mqtt_port");
+    setPrefInt("mqtt", "port", port.isEmpty() ? 1883 : port.toInt());
+    setPref("mqtt", "topic", server.arg("mqtt_topic"));
+    setPref("mqtt", "user", server.arg("mqtt_user"));
+    setPref("mqtt", "pass", server.arg("mqtt_pass"));
+
+    // Save HTTP webhook
+    setPref("http", "webhook", server.arg("http_webhook"));
+
+    Serial.println("Settings saved.");
+
     if (ssid.isEmpty()) {
-        server.send(400, "text/html",
+        server.send(200, "text/html",
             "<html><body style='font-family:sans-serif;text-align:center;background:#111;color:#eee;padding:40px'>"
-            "<h2 style='color:#f44336'>Fehler</h2><p>SSID fehlt.</p>"
-            "<a href='/' style='color:#4CAF50'>Zurueck</a></body></html>");
+            "<h2 style='color:#4CAF50'>Einstellungen gespeichert!</h2>"
+            "<p>MQTT und Webhook Einstellungen wurden aktualisiert.</p>"
+            "<a href='/' style='color:#4CAF50;font-size:18px'>Zurueck</a></body></html>");
         return;
     }
 
@@ -234,7 +329,8 @@ void handleSave() {
 
     if (WiFi.status() == WL_CONNECTED) {
         String ip = WiFi.localIP().toString();
-        saveWiFiCredentials(ssid, pass);
+        setPref("wifi", "ssid", ssid);
+        setPref("wifi", "pass", pass);
         Serial.printf("WiFi OK. IP: %s\n", ip.c_str());
         server.send(200, "text/html",
             "<html><body style='font-family:sans-serif;text-align:center;background:#111;color:#eee;padding:40px'>"
@@ -254,6 +350,7 @@ void handleSave() {
             "<h2 style='color:#f44336'>Verbindung fehlgeschlagen</h2>"
             "<p>WLAN: " + ssid + "</p>"
             "<p>Bitte SSID und Passwort pruefen.</p>"
+            "<p style='color:#4CAF50;margin-top:10px'>MQTT/Webhook Einstellungen wurden trotzdem gespeichert.</p>"
             "<a href='/' style='color:#4CAF50;font-size:18px'>Erneut versuchen</a></body></html>");
     }
 }
@@ -275,12 +372,24 @@ void handleApiWeight() {
         "{\"weight\":" + String(finalWeight, 1) + ",\"time\":\"" + String(finalWeightTime) + "\"}");
 }
 
+void handleApiSettings() {
+    String json = "{";
+    json += "\"mqtt_broker\":\"" + getPref("mqtt", "broker") + "\"";
+    json += ",\"mqtt_port\":" + String(getPrefInt("mqtt", "port", 1883));
+    json += ",\"mqtt_topic\":\"" + getPref("mqtt", "topic") + "\"";
+    json += ",\"mqtt_user\":\"" + getPref("mqtt", "user") + "\"";
+    json += ",\"http_webhook\":\"" + getPref("http", "webhook") + "\"";
+    json += "}";
+    server.send(200, "application/json", json);
+}
+
 void setupWebServer() {
     server.on("/", handleRoot);
     server.on("/setup", handleSetup);
     server.on("/save", HTTP_POST, handleSave);
     server.on("/api/scan", handleApiScan);
     server.on("/api/weight", handleApiWeight);
+    server.on("/api/settings", handleApiSettings);
     server.begin();
 }
 
@@ -296,7 +405,6 @@ class ClientCallbacks : public BLEClientCallbacks {
 
 void parseScaleData(uint8_t* data, size_t length) {
     if (length < 8 || data[0] != 0xAC || data[1] != 0x02) return;
-
 
     uint8_t type = data[6];
 
@@ -318,6 +426,7 @@ void parseScaleData(uint8_t* data, size_t length) {
             strcpy(finalWeightTime, "");
         }
         Serial.printf(">>> FINAL WEIGHT: %.1f kg <<<\n", weight);
+        forwardWeight(weight, finalWeightTime);
     } else {
         Serial.printf("  Measuring: %.1f kg\n", weight);
     }
@@ -366,7 +475,6 @@ bool connectToScale() {
 
     Serial.println("Connected. Waiting for measurement...");
     connected = true;
-
     return true;
 }
 

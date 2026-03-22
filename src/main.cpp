@@ -11,18 +11,16 @@
 #define SCALE_NAME      "FitTrack"
 #define AP_SSID         "OpenTrackFit"
 #define AP_PASSWORD     "12345678"
-#define IDLE_TIMEOUT_MS 10000
-#define AP_TIMEOUT_MS   300000  // 5 minutes
-#define WIFI_LOST_MS    60000   // 1 minute before switching to AP
+#define AP_TIMEOUT_MS   300000
+#define WIFI_LOST_MS    60000
 
-// --- BLE UUIDs ---
-static BLEUUID SCALE_SERVICE_UUID("0000ffb0-0000-1000-8000-00805f9b34fb");
-static BLEUUID CHAR_FFB2_UUID("0000ffb2-0000-1000-8000-00805f9b34fb");
-static BLEUUID CHAR_FFB3_UUID("0000ffb3-0000-1000-8000-00805f9b34fb");
+// --- BLE ---
+static BLEUUID SVC_FFB0("0000ffb0-0000-1000-8000-00805f9b34fb");
+static BLEUUID CHR_FFB2("0000ffb2-0000-1000-8000-00805f9b34fb");
+static BLEUUID CHR_FFB3("0000ffb3-0000-1000-8000-00805f9b34fb");
 
 #define PKT_LIVE   0xCE
 #define PKT_STABLE 0xCA
-#define PKT_POST   0xCB
 
 // --- State ---
 enum Mode { MODE_AP, MODE_STA, MODE_BLE_ONLY };
@@ -32,8 +30,8 @@ BLEAdvertisedDevice* pScaleDevice = nullptr;
 BLEClient* pClient = nullptr;
 volatile bool connected = false;
 bool doConnect = false;
-volatile unsigned long lastDataTime = 0;
 bool scanning = false;
+
 
 WebServer server(80);
 Preferences prefs;
@@ -41,13 +39,10 @@ Mode currentMode = MODE_BLE_ONLY;
 unsigned long apStartTime = 0;
 unsigned long wifiLostTime = 0;
 
-// Weight data (volatile for ISR-safe access from BLE callback)
-volatile float currentWeight = 0;
 volatile float finalWeight = 0;
-volatile bool measuring = false;
-volatile unsigned long lastWeightTime = 0;
+char finalWeightTime[20] = "";
 
-// --- HTML Pages ---
+// --- HTML ---
 
 const char CONFIG_PAGE[] PROGMEM = R"rawliteral(
 <!DOCTYPE html>
@@ -80,10 +75,7 @@ fetch('/api/scan').then(r=>r.json()).then(d=>{
   var inp=document.getElementById('ssid_manual');
   var st=document.getElementById('scan-status');
   if(d.length>0){
-    sel.style.display='';
-    inp.style.display='none';
-    inp.name='';
-    sel.name='ssid';
+    sel.style.display='';inp.style.display='none';inp.name='';sel.name='ssid';
     d.forEach(function(n){
       var o=document.createElement('option');
       o.value=n.ssid;o.textContent=n.ssid+' ('+n.rssi+'dBm)';
@@ -94,17 +86,14 @@ fetch('/api/scan').then(r=>r.json()).then(d=>{
     sel.appendChild(o);
     sel.onchange=function(){
       if(sel.value==='__manual__'){
-        inp.style.display='';inp.name='ssid';inp.required=true;
-        sel.name='';
+        inp.style.display='';inp.name='ssid';inp.required=true;sel.name='';
       }else{
-        inp.style.display='none';inp.name='';inp.required=false;
-        sel.name='ssid';
+        inp.style.display='none';inp.name='';inp.required=false;sel.name='ssid';
       }
     };
     st.textContent=d.length+' Netzwerke gefunden';
   }else{
-    st.textContent='Keine Netzwerke gefunden';
-    inp.required=true;
+    st.textContent='Keine Netzwerke gefunden';inp.required=true;
   }
 }).catch(()=>{
   document.getElementById('scan-status').textContent='Scan fehlgeschlagen';
@@ -114,7 +103,7 @@ fetch('/api/scan').then(r=>r.json()).then(d=>{
 </body></html>
 )rawliteral";
 
-const char LIVE_PAGE[] PROGMEM = R"rawliteral(
+const char WEIGHT_PAGE[] PROGMEM = R"rawliteral(
 <!DOCTYPE html>
 <html><head>
 <meta name="viewport" content="width=device-width,initial-scale=1">
@@ -122,51 +111,31 @@ const char LIVE_PAGE[] PROGMEM = R"rawliteral(
 <style>
   body{font-family:sans-serif;max-width:500px;margin:40px auto;padding:0 20px;background:#111;color:#eee;text-align:center}
   h1{color:#4CAF50;margin-bottom:0}
-  .weight{font-size:72px;font-weight:bold;margin:30px 0 10px}
+  .weight{font-size:72px;font-weight:bold;margin:40px 0 10px;color:#4CAF50}
   .unit{font-size:28px;color:#888}
-  .status{font-size:18px;color:#888;margin:10px 0}
-  .measuring{color:#FFC107}
-  .final{color:#4CAF50}
-  .idle{color:#666}
-  .last{margin-top:40px;padding:20px;background:#1a1a1a;border-radius:10px}
-  .last-label{color:#888;font-size:14px}
-  .last-weight{font-size:36px;font-weight:bold;color:#4CAF50}
-  .settings{margin-top:30px}
+  .status{font-size:16px;color:#888;margin-top:20px}
+  .settings{margin-top:40px}
   .settings a{color:#888;font-size:13px}
 </style>
 </head><body>
 <h1>OpenTrackFit</h1>
-<div class="status" id="status">Warte auf Waage...</div>
 <div class="weight" id="weight">--.-</div>
 <div class="unit">kg</div>
-<div class="last">
-  <div class="last-label">Letzte Messung</div>
-  <div class="last-weight" id="final">--.-</div>
-  <div class="unit">kg</div>
-</div>
+<div class="status" id="status">Noch keine Messung</div>
+<div class="status" id="time"></div>
 <div class="settings"><a href="/setup">WLAN Einstellungen</a></div>
 <script>
-setInterval(function(){
+function load(){
   fetch('/api/weight').then(r=>r.json()).then(d=>{
-    var s=document.getElementById('status');
-    var w=document.getElementById('weight');
-    var f=document.getElementById('final');
-    if(d.measuring){
-      w.textContent=d.current.toFixed(1);
-      s.textContent='Messung laeuft...';
-      s.className='status measuring';
-    }else if(d.current>0){
-      w.textContent=d.current.toFixed(1);
-      s.textContent='Verbunden';
-      s.className='status';
-    }else{
-      w.textContent='--.-';
-      s.textContent='Warte auf Waage...';
-      s.className='status idle';
+    if(d.weight>0){
+      document.getElementById('weight').textContent=d.weight.toFixed(1);
+      document.getElementById('status').textContent='Letzte Messung';
+      if(d.time) document.getElementById('time').textContent=d.time;
     }
-    if(d.final>0) f.textContent=d.final.toFixed(1);
   }).catch(()=>{});
-},500);
+}
+load();
+setInterval(load,5000);
 </script>
 </body></html>
 )rawliteral";
@@ -210,27 +179,21 @@ bool connectWiFi() {
         retries++;
     }
     Serial.println();
-
     if (WiFi.status() == WL_CONNECTED) {
-        Serial.printf("WiFi connected. IP: %s\n", WiFi.localIP().toString().c_str());
+        configTzTime("CET-1CEST,M3.5.0,M10.5.0/3", "pool.ntp.org");
         return true;
     }
-    Serial.println("WiFi connection failed.");
     return false;
 }
 
 void startAP() {
-    Serial.println("Starting AP mode...");
     WiFi.mode(WIFI_AP);
     WiFi.softAP(AP_SSID, AP_PASSWORD);
-    Serial.printf("AP started: %s (pass: %s)\n", AP_SSID, AP_PASSWORD);
-    Serial.printf("Config page: http://%s\n", WiFi.softAPIP().toString().c_str());
     currentMode = MODE_AP;
     apStartTime = millis();
 }
 
 void stopAP() {
-    Serial.println("Stopping AP mode...");
     WiFi.softAPdisconnect(true);
     WiFi.mode(WIFI_STA);
     currentMode = MODE_BLE_ONLY;
@@ -239,11 +202,7 @@ void stopAP() {
 // --- Web Handlers ---
 
 void handleRoot() {
-    if (currentMode == MODE_AP) {
-        server.send(200, "text/html", CONFIG_PAGE);
-    } else {
-        server.send(200, "text/html", LIVE_PAGE);
-    }
+    server.send(200, "text/html", currentMode == MODE_AP ? CONFIG_PAGE : WEIGHT_PAGE);
 }
 
 void handleSetup() {
@@ -252,10 +211,9 @@ void handleSetup() {
 
 void handleSave() {
     String ssid = server.arg("ssid");
-    if (ssid == "__manual__" || ssid.isEmpty()) {
-        ssid = server.arg("ssid_manual");
-    }
+    if (ssid == "__manual__" || ssid.isEmpty()) ssid = server.arg("ssid_manual");
     String pass = server.arg("pass");
+
     if (ssid.isEmpty()) {
         server.send(400, "text/html",
             "<html><body style='font-family:sans-serif;text-align:center;background:#111;color:#eee;padding:40px'>"
@@ -264,7 +222,6 @@ void handleSave() {
         return;
     }
 
-    // Try connecting while AP stays active
     WiFi.mode(WIFI_AP_STA);
     WiFi.begin(ssid.c_str(), pass.c_str());
     Serial.printf("Testing WiFi: %s\n", ssid.c_str());
@@ -278,14 +235,14 @@ void handleSave() {
     if (WiFi.status() == WL_CONNECTED) {
         String ip = WiFi.localIP().toString();
         saveWiFiCredentials(ssid, pass);
-        Serial.printf("WiFi test OK. IP: %s\n", ip.c_str());
+        Serial.printf("WiFi OK. IP: %s\n", ip.c_str());
         server.send(200, "text/html",
             "<html><body style='font-family:sans-serif;text-align:center;background:#111;color:#eee;padding:40px'>"
             "<h2 style='color:#4CAF50'>Verbunden!</h2>"
             "<p>WLAN: " + ssid + "</p>"
-            "<p>IP im Netzwerk: <strong>" + ip + "</strong></p>"
-            "<p>Erreichbar unter: <strong>http://opentrackfit.local</strong></p>"
-            "<p style='color:#888;margin-top:20px'>ESP32 startet neu in 3 Sekunden...</p></body></html>");
+            "<p>IP: <strong>" + ip + "</strong></p>"
+            "<p>mDNS: <strong>http://opentrackfit.local</strong></p>"
+            "<p style='color:#888;margin-top:20px'>Neustart in 3s...</p></body></html>");
         delay(3000);
         ESP.restart();
     } else {
@@ -314,10 +271,8 @@ void handleApiScan() {
 }
 
 void handleApiWeight() {
-    String json = "{\"current\":" + String(currentWeight, 1) +
-                  ",\"final\":" + String(finalWeight, 1) +
-                  ",\"measuring\":" + (measuring ? "true" : "false") + "}";
-    server.send(200, "application/json", json);
+    server.send(200, "application/json",
+        "{\"weight\":" + String(finalWeight, 1) + ",\"time\":\"" + String(finalWeightTime) + "\"}");
 }
 
 void setupWebServer() {
@@ -327,7 +282,6 @@ void setupWebServer() {
     server.on("/api/scan", handleApiScan);
     server.on("/api/weight", handleApiWeight);
     server.begin();
-    Serial.println("Web server started.");
 }
 
 // --- BLE ---
@@ -336,7 +290,6 @@ class ClientCallbacks : public BLEClientCallbacks {
     void onConnect(BLEClient* client) override {}
     void onDisconnect(BLEClient* client) override {
         connected = false;
-        measuring = false;
         Serial.println("\n>> Scale disconnected. Rescanning...");
     }
 };
@@ -344,27 +297,29 @@ class ClientCallbacks : public BLEClientCallbacks {
 void parseScaleData(uint8_t* data, size_t length) {
     if (length < 8 || data[0] != 0xAC || data[1] != 0x02) return;
 
-    lastDataTime = millis();
+
     uint8_t type = data[6];
 
     uint8_t sum = 0;
     for (int i = 2; i <= 6; i++) sum += data[i];
     if (sum != data[7]) return;
 
-    if (type == PKT_LIVE || type == PKT_STABLE) {
-        uint16_t raw = (data[2] << 8) | data[3];
-        float weight = raw / 10.0f;
-        currentWeight = weight;
-        lastWeightTime = millis();
+    if (type != PKT_LIVE && type != PKT_STABLE) return;
 
-        if (type == PKT_STABLE) {
-            finalWeight = weight;
-            measuring = false;
-            Serial.printf(">>> FINAL WEIGHT: %.1f kg <<<\n", weight);
+    uint16_t raw = (data[2] << 8) | data[3];
+    float weight = raw / 10.0f;
+
+    if (type == PKT_STABLE) {
+        finalWeight = weight;
+        struct tm ti;
+        if (getLocalTime(&ti, 0)) {
+            strftime(finalWeightTime, sizeof(finalWeightTime), "%d.%m.%Y %H:%M", &ti);
         } else {
-            measuring = true;
-            Serial.printf("  Measuring: %.1f kg\n", weight);
+            strcpy(finalWeightTime, "");
         }
+        Serial.printf(">>> FINAL WEIGHT: %.1f kg <<<\n", weight);
+    } else {
+        Serial.printf("  Measuring: %.1f kg\n", weight);
     }
 }
 
@@ -387,10 +342,7 @@ class ScanCallbacks : public BLEAdvertisedDeviceCallbacks {
 bool connectToScale() {
     Serial.printf("Connecting to %s...\n", pScaleDevice->getAddress().toString().c_str());
 
-    if (pClient) {
-        delete pClient;
-        pClient = nullptr;
-    }
+    if (pClient) { delete pClient; pClient = nullptr; }
     pClient = BLEDevice::createClient();
     pClient->setClientCallbacks(new ClientCallbacks());
 
@@ -399,26 +351,22 @@ bool connectToScale() {
         return false;
     }
 
-    BLERemoteService* pService = pClient->getService(SCALE_SERVICE_UUID);
+    BLERemoteService* pService = pClient->getService(SVC_FFB0);
     if (!pService) {
-        Serial.println("Scale service 0xFFB0 not found!");
+        Serial.println("Service 0xFFB0 not found!");
         pClient->disconnect();
         return false;
     }
 
-    BLERemoteCharacteristic* pFFB2 = pService->getCharacteristic(CHAR_FFB2_UUID);
-    if (pFFB2 && pFFB2->canNotify()) {
-        pFFB2->registerForNotify(notifyCallback);
-    }
+    BLERemoteCharacteristic* pFFB2 = pService->getCharacteristic(CHR_FFB2);
+    if (pFFB2 && pFFB2->canNotify()) pFFB2->registerForNotify(notifyCallback);
 
-    BLERemoteCharacteristic* pFFB3 = pService->getCharacteristic(CHAR_FFB3_UUID);
-    if (pFFB3 && pFFB3->canNotify()) {
-        pFFB3->registerForNotify(notifyCallback);
-    }
+    BLERemoteCharacteristic* pFFB3 = pService->getCharacteristic(CHR_FFB3);
+    if (pFFB3 && pFFB3->canNotify()) pFFB3->registerForNotify(notifyCallback);
 
-    Serial.println("Connected. Waiting for measurement...\n");
+    Serial.println("Connected. Waiting for measurement...");
     connected = true;
-    lastDataTime = millis();
+
     return true;
 }
 
@@ -464,7 +412,7 @@ void setup() {
 void loop() {
     server.handleClient();
 
-    // AP timeout: shut down AP after 5 minutes, then retry WiFi
+    // AP timeout
     if (currentMode == MODE_AP && (millis() - apStartTime > AP_TIMEOUT_MS)) {
         stopAP();
         if (connectWiFi()) {
@@ -474,14 +422,14 @@ void loop() {
         }
     }
 
-    // STA mode: monitor WiFi connection, switch to AP after 1 min disconnect
+    // WiFi watchdog
     if (currentMode == MODE_STA) {
         if (WiFi.status() != WL_CONNECTED) {
             if (wifiLostTime == 0) {
                 wifiLostTime = millis();
-                Serial.println("WiFi lost. Waiting 60s before AP fallback...");
+                Serial.println("WiFi lost. Waiting 60s...");
             } else if (millis() - wifiLostTime > WIFI_LOST_MS) {
-                Serial.println("WiFi lost for 60s. Switching to AP mode...");
+                Serial.println("WiFi lost for 60s. AP fallback.");
                 wifiLostTime = 0;
                 startAP();
             }
@@ -490,27 +438,16 @@ void loop() {
         }
     }
 
-    // BLE: timeout disconnect
-    if (connected && (millis() - lastDataTime > IDLE_TIMEOUT_MS)) {
-        Serial.println("No data timeout. Disconnecting...");
-        pClient->disconnect();
-    }
-
-    // BLE: connect if found
+    // BLE connect
     if (doConnect && !connected) {
         connectToScale();
         doConnect = false;
     }
 
-    // BLE: non-blocking scan
+    // BLE non-blocking scan
     if (!connected && !doConnect && !scanning) {
-        pBLEScan->start(0, [](BLEScanResults) { scanning = false; }, false);
+        pBLEScan->start(5, [](BLEScanResults) { scanning = false; }, false);
         scanning = true;
-    }
-
-    // Clear live weight if no data for 5s
-    if (currentWeight > 0 && !measuring && (millis() - lastWeightTime > 5000)) {
-        currentWeight = 0;
     }
 
     delay(10);

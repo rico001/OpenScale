@@ -45,6 +45,8 @@ unsigned long wifiLostTime = 0;
 volatile float finalWeight = 0;
 char finalWeightTime[20] = "";
 volatile bool doForward = false;
+volatile bool weightReady = false;   // set after CA (stable weight), cleared after forward
+volatile uint16_t impedanceRaw = 0;  // BIA impedance from CB packets (ohms)
 
 // --- Body Composition Data ---
 struct BodyData {
@@ -65,6 +67,8 @@ struct BodyData {
     float fatFreeWeight;   // kg
     float muscleMass;      // kg
     float proteinMass;     // kg
+    uint16_t impedance;    // ohms (BIA), 0 = not available
+    bool biaValid;         // true if impedance-based calc was used
     char time[20];
 };
 BodyData bodyData = {};
@@ -152,8 +156,8 @@ Profile getActiveProfile() {
 }
 
 // --- Body Composition Calculation ---
-// Uses BMI-based estimation formulas (no impedance data from scale)
-// Sources: Deurenberg (body fat), Mifflin-St Jeor (BMR), Hume (water)
+// Uses impedance-based formulas when BIA data available, falls back to BMI-based
+// Sources: Kushner/Schoeller (FFM from BIA, adjusted for foot-to-foot), Owen (BMR), Broca (ideal weight)
 
 void calculateBodyComposition(float weight, const char* time) {
     Profile prof = getActiveProfile();
@@ -161,12 +165,13 @@ void calculateBodyComposition(float weight, const char* time) {
     uint16_t age = prof.age;
     uint16_t gender = prof.gender; // 0=male, 1=female
     activeProfileName = prof.name;
+    uint16_t impedance = impedanceRaw;
 
     bodyData.weight = weight;
+    bodyData.impedance = impedance;
     strncpy(bodyData.time, time, sizeof(bodyData.time) - 1);
 
     if (heightCm == 0 || age == 0) {
-        // No profile data — only store weight
         bodyData.bmi = 0;
         Serial.println("No profile set — skipping body composition calc");
         return;
@@ -175,74 +180,90 @@ void calculateBodyComposition(float weight, const char* time) {
     float heightM = heightCm / 100.0f;
     bool male = (gender == 0);
 
-    // BMI
+    // BMI = weight / height²
     bodyData.bmi = weight / (heightM * heightM);
 
-    // Body Fat % — Deurenberg formula
-    // BF% = 1.20 × BMI + 0.23 × age - 10.8 × sex(1=male,0=female) - 5.4
-    bodyData.bodyFatPct = 1.20f * bodyData.bmi + 0.23f * age - (male ? 10.8f : 0.0f) - 5.4f;
-    if (bodyData.bodyFatPct < 3.0f) bodyData.bodyFatPct = 3.0f;
-    if (bodyData.bodyFatPct > 60.0f) bodyData.bodyFatPct = 60.0f;
-
-    // Fat mass & fat-free weight
-    bodyData.fatMass = weight * bodyData.bodyFatPct / 100.0f;
-    bodyData.fatFreeWeight = weight - bodyData.fatMass;
-
-    // Muscle mass (~90% of fat-free mass, protein is a component of muscle)
-    bodyData.muscleMass = bodyData.fatFreeWeight * 0.90f;
-    bodyData.musclePct = bodyData.muscleMass / weight * 100.0f;
-
-    // Bone mass (~4.5% of fat-free mass, typically 2.5-4 kg)
-    bodyData.boneMass = bodyData.fatFreeWeight * 0.045f;
-
-    // Protein mass (~23% of fat-free mass, overlaps with muscle tissue)
-    bodyData.proteinMass = bodyData.fatFreeWeight * 0.23f;
-    bodyData.proteinPct = bodyData.proteinMass / weight * 100.0f;
-
-    // Body water % — ~73% of fat-free mass
-    bodyData.waterPct = bodyData.fatFreeWeight * 73.0f / weight;
-
-    // Ideal weight (BMI 22)
-    bodyData.idealWeight = 22.0f * heightM * heightM;
-
-    // Weight control — how much to lose/gain
+    // Ideal weight — modified Broca: male (H-80)*0.7, female (H-70)*0.6
+    if (male) {
+        bodyData.idealWeight = (heightCm - 80) * 0.7f;
+    } else {
+        bodyData.idealWeight = (heightCm - 70) * 0.6f;
+    }
     bodyData.weightControl = weight - bodyData.idealWeight;
 
-    // BMR — Mifflin-St Jeor
+    // BMR — Owen (1986): male 879+10.2*W, female 795+7.18*W
     if (male) {
-        bodyData.bmr = 10.0f * weight + 6.25f * heightCm - 5.0f * age + 5;
+        bodyData.bmr = 879.0f + 10.2f * weight;
     } else {
-        bodyData.bmr = 10.0f * weight + 6.25f * heightCm - 5.0f * age - 161;
+        bodyData.bmr = 795.0f + 7.18f * weight;
     }
 
-    // Metabolic age — compare actual BMR to expected BMR at ideal weight
-    // Difference in BMR due to excess/deficit weight maps to age offset
+    // Metabolic age — offset from actual age based on BMR vs expected BMR at ideal weight
     float expectedBmr;
     if (male) {
-        expectedBmr = 10.0f * bodyData.idealWeight + 6.25f * heightCm - 5.0f * age + 5;
+        expectedBmr = 879.0f + 10.2f * bodyData.idealWeight;
     } else {
-        expectedBmr = 10.0f * bodyData.idealWeight + 6.25f * heightCm - 5.0f * age - 161;
+        expectedBmr = 795.0f + 7.18f * bodyData.idealWeight;
     }
-    // Higher actual BMR (heavier) → older metabolic age
-    // ~50 kcal BMR difference per metabolic year
-    bodyData.metabolicAge = age + (int)((bodyData.bmr - expectedBmr) / 50.0f);
+    bodyData.metabolicAge = age + (int)((bodyData.bmr - expectedBmr) / 85.0f);
     if (bodyData.metabolicAge < 12) bodyData.metabolicAge = 12;
     if (bodyData.metabolicAge > 90) bodyData.metabolicAge = 90;
 
-    // Visceral fat index — BMI/age based estimate, range 1-30
+    // Visceral fat index — empirical BMI-based regression, clamped 1-30
     if (male) {
-        bodyData.visceralFat = (int)(bodyData.bmi * 0.68f - 8.0f);
+        bodyData.visceralFat = (int)(bodyData.bmi * 0.68f - 7.2f);
     } else {
-        bodyData.visceralFat = (int)(bodyData.bmi * 0.58f - 5.0f);
+        bodyData.visceralFat = (int)(bodyData.bmi * 0.58f - 4.2f);
     }
     if (bodyData.visceralFat < 1) bodyData.visceralFat = 1;
     if (bodyData.visceralFat > 30) bodyData.visceralFat = 30;
 
-    // Subcutaneous fat % — body fat minus visceral estimate
-    bodyData.subcutFatPct = bodyData.bodyFatPct - bodyData.visceralFat * 0.4f;
-    if (bodyData.subcutFatPct < 1.0f) bodyData.subcutFatPct = 1.0f;
+    // --- BIA-dependent values (require valid impedance) ---
+    if (impedance > 0) {
+        bodyData.biaValid = true;
+        // Fat-free mass — Kushner/Schoeller with adjusted H²/Z coefficient for foot-to-foot BIA
+        // FFM = a * (H²/Z) + b * W + c, where H in cm, Z in ohms
+        float h2z = (float)(heightCm * heightCm) / impedance;
+        if (male) {
+            bodyData.fatFreeWeight = 0.600f * h2z + 0.338f * weight + 5.32f;
+        } else {
+            bodyData.fatFreeWeight = 0.589f * h2z + 0.295f * weight + 5.49f;
+        }
+        if (bodyData.fatFreeWeight > weight) bodyData.fatFreeWeight = weight * 0.95f;
+        bodyData.fatMass = weight - bodyData.fatFreeWeight;
+        bodyData.bodyFatPct = bodyData.fatMass / weight * 100.0f;
+        if (bodyData.bodyFatPct < 3.0f) bodyData.bodyFatPct = 3.0f;
+
+        // Derived from fat-free mass using fixed tissue ratios
+        bodyData.muscleMass = bodyData.fatFreeWeight * 0.90f;   // 90% of FFM
+        bodyData.musclePct = bodyData.muscleMass / weight * 100.0f;
+        bodyData.boneMass = bodyData.fatFreeWeight * 0.046f;    // 4.6% of FFM
+        bodyData.proteinMass = bodyData.fatFreeWeight * 0.231f; // 23.1% of FFM
+        bodyData.proteinPct = bodyData.proteinMass / weight * 100.0f;
+        bodyData.waterPct = bodyData.fatFreeWeight * 72.4f / weight; // 72.4% of FFM
+        bodyData.subcutFatPct = bodyData.bodyFatPct - bodyData.visceralFat * 0.21f;
+        if (bodyData.subcutFatPct < 1.0f) bodyData.subcutFatPct = 1.0f;
+
+        Serial.printf("  Using BIA impedance: %d ohms\n", impedance);
+    } else {
+        bodyData.biaValid = false;
+        // Zero out BIA-dependent fields
+        bodyData.bodyFatPct = 0;
+        bodyData.fatMass = 0;
+        bodyData.fatFreeWeight = 0;
+        bodyData.muscleMass = 0;
+        bodyData.musclePct = 0;
+        bodyData.boneMass = 0;
+        bodyData.proteinMass = 0;
+        bodyData.proteinPct = 0;
+        bodyData.waterPct = 0;
+        bodyData.subcutFatPct = 0;
+        Serial.println("  No impedance — BIA values not available");
+    }
 
     Serial.println("--- Body Composition ---");
+    if (bodyData.impedance > 0)
+        Serial.printf("  Impedance:      %d ohms\n", bodyData.impedance);
     Serial.printf("  BMI:            %.1f\n", bodyData.bmi);
     Serial.printf("  Body Fat:       %.1f %%\n", bodyData.bodyFatPct);
     Serial.printf("  Muscle:         %.1f %% (%.1f kg)\n", bodyData.musclePct, bodyData.muscleMass);
@@ -269,23 +290,42 @@ String buildBodyJson() {
     if (!activeProfileName.isEmpty()) {
         j += ",\"profile\":\"" + activeProfileName + "\"";
     }
+    if (bodyData.impedance > 0) {
+        j += ",\"impedance\":" + String(bodyData.impedance);
+    }
     if (bodyData.bmi > 0) {
+        j += ",\"body_analysis\":" + String(bodyData.biaValid ? "true" : "false");
+        // Always available with profile
         j += ",\"bmi\":" + String(bodyData.bmi, 1);
-        j += ",\"body_fat_pct\":" + String(bodyData.bodyFatPct, 1);
-        j += ",\"muscle_pct\":" + String(bodyData.musclePct, 1);
-        j += ",\"water_pct\":" + String(bodyData.waterPct, 1);
-        j += ",\"bone_mass\":" + String(bodyData.boneMass, 1);
         j += ",\"bmr\":" + String((int)bodyData.bmr);
-        j += ",\"protein_pct\":" + String(bodyData.proteinPct, 1);
         j += ",\"metabolic_age\":" + String(bodyData.metabolicAge);
         j += ",\"visceral_fat\":" + String(bodyData.visceralFat);
-        j += ",\"subcutaneous_fat_pct\":" + String(bodyData.subcutFatPct, 1);
         j += ",\"ideal_weight\":" + String(bodyData.idealWeight, 1);
         j += ",\"weight_control\":" + String(bodyData.weightControl, 1);
-        j += ",\"fat_mass\":" + String(bodyData.fatMass, 1);
-        j += ",\"fat_free_weight\":" + String(bodyData.fatFreeWeight, 1);
-        j += ",\"muscle_mass\":" + String(bodyData.muscleMass, 1);
-        j += ",\"protein_mass\":" + String(bodyData.proteinMass, 1);
+        // BIA-dependent (null if no valid impedance)
+        if (bodyData.biaValid) {
+            j += ",\"body_fat_pct\":" + String(bodyData.bodyFatPct, 1);
+            j += ",\"muscle_pct\":" + String(bodyData.musclePct, 1);
+            j += ",\"water_pct\":" + String(bodyData.waterPct, 1);
+            j += ",\"bone_mass\":" + String(bodyData.boneMass, 1);
+            j += ",\"protein_pct\":" + String(bodyData.proteinPct, 1);
+            j += ",\"subcutaneous_fat_pct\":" + String(bodyData.subcutFatPct, 1);
+            j += ",\"fat_mass\":" + String(bodyData.fatMass, 1);
+            j += ",\"fat_free_weight\":" + String(bodyData.fatFreeWeight, 1);
+            j += ",\"muscle_mass\":" + String(bodyData.muscleMass, 1);
+            j += ",\"protein_mass\":" + String(bodyData.proteinMass, 1);
+        } else {
+            j += ",\"body_fat_pct\":null";
+            j += ",\"muscle_pct\":null";
+            j += ",\"water_pct\":null";
+            j += ",\"bone_mass\":null";
+            j += ",\"protein_pct\":null";
+            j += ",\"subcutaneous_fat_pct\":null";
+            j += ",\"fat_mass\":null";
+            j += ",\"fat_free_weight\":null";
+            j += ",\"muscle_mass\":null";
+            j += ",\"protein_mass\":null";
+        }
     }
     j += "}";
     return j;
@@ -334,231 +374,7 @@ void forwardWeight(float weight, const char* time) {
 
 // --- HTML ---
 
-const char CONFIG_PAGE[] PROGMEM = R"rawliteral(
-<!DOCTYPE html>
-<html><head>
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>OpenTrackFit Setup</title>
-<style>
-  *{box-sizing:border-box}
-  body{font-family:sans-serif;max-width:560px;margin:0 auto;padding:30px 20px;background:#111;color:#eee}
-  h1{color:#4CAF50;margin-bottom:5px;font-size:clamp(22px,3.5vw,32px)}
-  .home{color:#888;font-size:clamp(13px,1.5vw,15px);text-decoration:none;display:block;margin-bottom:20px}
-  .card{background:#1a1a1a;border-radius:10px;padding:clamp(16px,3vw,28px);margin-bottom:18px}
-  .card h2{color:#ccc;font-size:clamp(14px,2vw,17px);margin:0 0 14px 0;padding-bottom:8px;border-bottom:1px solid #333}
-  input,select{width:100%;padding:clamp(10px,1.5vw,14px);margin:6px 0;border-radius:6px;border:1px solid #444;background:#222;color:#eee;font-size:clamp(14px,1.5vw,16px)}
-  label{display:block;margin-top:10px;color:#999;font-size:clamp(12px,1.5vw,14px)}
-  button{width:100%;padding:clamp(11px,1.5vw,15px);margin-top:14px;background:#4CAF50;color:#fff;border:none;border-radius:6px;font-size:clamp(15px,1.5vw,18px);cursor:pointer}
-  button:hover{background:#45a049}
-  .info{color:#888;font-size:clamp(11px,1.2vw,14px);margin-top:6px}
-  .msg{padding:10px;border-radius:6px;margin-top:10px;font-size:clamp(13px,1.5vw,15px);display:none}
-  .msg.ok{display:block;background:#1b3a1b;color:#4CAF50}
-  .msg.err{display:block;background:#3a1b1b;color:#f44336}
-  .spinner-wrap{display:flex;justify-content:center;align-items:center;padding:80px 0}
-  .spinner{width:40px;height:40px;border:4px solid #333;border-top:4px solid #4CAF50;border-radius:50%;animation:spin .8s linear infinite}
-  @keyframes spin{to{transform:rotate(360deg)}}
-  .content{display:none}
-</style>
-</head><body>
-<h1>OpenTrackFit</h1>
-<a class="home" href="/">Zurueck zur Startseite</a>
-<div class="spinner-wrap" id="loader"><div class="spinner"></div></div>
-<div class="content" id="content">
-
-<div class="card">
-  <h2>Profile</h2>
-  <div id="profile-list"></div>
-  <div style="margin-top:14px;padding-top:14px;border-top:1px solid #333">
-    <div style="color:#999;font-size:13px;margin-bottom:8px">Neues Profil / Bearbeiten</div>
-    <form id="profile-form" action="/save/profile" method="POST">
-      <label>Name</label>
-      <input name="name" id="pf_name" placeholder="z.B. Rico" required>
-      <label>Geschlecht</label>
-      <select name="gender" id="pf_gender">
-        <option value="0">Maennlich</option>
-        <option value="1">Weiblich</option>
-      </select>
-      <label>Alter (Jahre)</label>
-      <input name="age" id="pf_age" type="number" min="10" max="99" placeholder="z.B. 35">
-      <label>Groesse (cm)</label>
-      <input name="height" id="pf_height" type="number" min="100" max="250" placeholder="z.B. 180">
-      <button type="submit">Profil speichern</button>
-      <div class="msg" id="profile-msg"></div>
-    </form>
-  </div>
-</div>
-
-<div class="card">
-  <h2>WLAN</h2>
-  <form action="/save/wifi" method="POST">
-    <label>SSID</label>
-    <select name="ssid" id="ssid" style="display:none"></select>
-    <input name="ssid_manual" id="ssid_manual" placeholder="WLAN Name">
-    <div class="info" id="scan-status">Scanne WLANs...</div>
-    <label>Passwort</label>
-    <input name="pass" type="password" placeholder="WLAN Passwort">
-    <button type="submit">WLAN speichern & verbinden</button>
-  </form>
-</div>
-
-<div class="card">
-  <h2>MQTT</h2>
-  <form action="/save/mqtt" method="POST">
-    <label>Broker</label>
-    <input name="broker" id="mqtt_broker" placeholder="z.B. 192.168.178.50">
-    <label>Port</label>
-    <input name="port" id="mqtt_port" placeholder="1883" type="number">
-    <label>Topic</label>
-    <input name="topic" id="mqtt_topic" placeholder="opentrackfit/weight">
-    <label>Benutzer (optional)</label>
-    <input name="user" id="mqtt_user" placeholder="">
-    <label>Passwort (optional)</label>
-    <input name="pass" id="mqtt_pass" type="password" placeholder="">
-    <button type="submit">MQTT speichern</button>
-    <div class="msg" id="mqtt-msg"></div>
-  </form>
-</div>
-
-<div class="card">
-  <h2>HTTP Webhook</h2>
-  <form action="/save/http" method="POST">
-    <label>POST URL</label>
-    <input name="webhook" id="http_webhook" placeholder="https://example.com/webhook">
-    <button type="submit">Webhook speichern</button>
-    <div class="msg" id="http-msg"></div>
-  </form>
-</div>
-
-<div class="card">
-  <h2>REST API</h2>
-  <p style="color:#999;font-size:14px;margin:0">Messdaten per API abrufen:</p>
-  <a href="/api/last-weight-data" target="_blank" style="display:block;margin-top:10px;color:#4CAF50;font-size:15px;word-break:break-all">/api/last-weight-data</a>
-  <p style="color:#666;font-size:12px;margin:6px 0 0">Dokumentation: <a href="/api/docs" target="_blank" style="color:#888">/api/docs</a></p>
-</div>
-
-<p class="info" style="text-align:center;margin-top:20px">AP schaltet sich nach 5 Min. automatisch ab.</p>
-</div>
-<script>
-var loader=document.getElementById('loader');
-var content=document.getElementById('content');
-var pending=0;
-var initialized=false;
-function busy(){
-  pending++;
-  loader.style.display='flex';
-  loader.style.padding=initialized?'12px 0':'80px 0';
-}
-function done(){
-  pending--;
-  if(pending<=0){
-    pending=0;
-    loader.style.display='none';
-    content.style.display='block';
-    initialized=true;
-  }
-}
-function api(url,opts){
-  busy();
-  return fetch(url,opts).then(r=>r.json()).finally(done);
-}
-// Initial load: scan + settings in parallel
-api('/api/scan').then(d=>{
-  var sel=document.getElementById('ssid');
-  var inp=document.getElementById('ssid_manual');
-  var st=document.getElementById('scan-status');
-  if(d.length>0){
-    sel.style.display='';inp.style.display='none';inp.name='';sel.name='ssid';
-    d.forEach(function(n){
-      var o=document.createElement('option');
-      o.value=n.ssid;o.textContent=n.ssid+' ('+n.rssi+'dBm)';
-      sel.appendChild(o);
-    });
-    var o=document.createElement('option');
-    o.value='__manual__';o.textContent='Manuell eingeben...';
-    sel.appendChild(o);
-    sel.onchange=function(){
-      if(sel.value==='__manual__'){
-        inp.style.display='';inp.name='ssid';inp.required=true;sel.name='';
-      }else{
-        inp.style.display='none';inp.name='';inp.required=false;sel.name='ssid';
-      }
-    };
-    st.textContent=d.length+' Netzwerke gefunden';
-  }else{
-    st.textContent='Keine Netzwerke gefunden';inp.required=true;
-  }
-}).catch(()=>{
-  document.getElementById('scan-status').textContent='Scan fehlgeschlagen';
-  document.getElementById('ssid_manual').required=true;
-});
-function loadSettings(){
-  api('/api/settings').then(d=>{
-    if(d.mqtt_broker) document.getElementById('mqtt_broker').value=d.mqtt_broker;
-    if(d.mqtt_port) document.getElementById('mqtt_port').value=d.mqtt_port;
-    if(d.mqtt_topic) document.getElementById('mqtt_topic').value=d.mqtt_topic;
-    if(d.mqtt_user) document.getElementById('mqtt_user').value=d.mqtt_user;
-    if(d.http_webhook) document.getElementById('http_webhook').value=d.http_webhook;
-    renderProfiles(d.profiles||[]);
-  }).catch(()=>{});
-}
-function renderProfiles(profiles){
-  var el=document.getElementById('profile-list');
-  if(!profiles.length){el.innerHTML='<div style="color:#666;font-size:13px">Keine Profile vorhanden</div>';return;}
-  var h='';
-  profiles.forEach(function(p){
-    var active=p.active;
-    h+='<div style="display:flex;align-items:center;gap:10px;padding:10px;margin-bottom:6px;background:'+(active?'#1b3a1b':'#222')+';border-radius:8px;border:1px solid '+(active?'#4CAF50':'#333')+'">';
-    h+='<div style="flex:1"><strong style="color:'+(active?'#4CAF50':'#eee')+'">'+p.name+'</strong>';
-    h+='<div style="color:#888;font-size:12px">'+(p.gender==0?'M':'W')+', '+p.age+' J., '+p.height+' cm</div></div>';
-    if(!active) h+='<button onclick="setActive(\''+p.name+'\')" style="width:auto;padding:6px 12px;font-size:13px;margin:0;background:#333;color:#eee">Aktivieren</button>';
-    h+='<button onclick="editProfile(\''+p.name+'\','+p.gender+','+p.age+','+p.height+')" style="width:auto;padding:6px 12px;font-size:13px;margin:0;background:#333;color:#eee">Bearbeiten</button>';
-    h+='<button onclick="delProfile(\''+p.name+'\')" style="width:auto;padding:6px 10px;font-size:13px;margin:0;background:#3a1b1b;color:#f44">X</button>';
-    h+='</div>';
-  });
-  el.innerHTML=h;
-}
-function setActive(name){
-  api('/api/set-profile',{method:'POST',body:'name='+encodeURIComponent(name),headers:{'Content-Type':'application/x-www-form-urlencoded'}})
-    .then(()=>loadSettings()).catch(()=>{});
-}
-function delProfile(name){
-  if(!confirm(name+' loeschen?'))return;
-  api('/delete/profile',{method:'POST',body:'name='+encodeURIComponent(name),headers:{'Content-Type':'application/x-www-form-urlencoded'}})
-    .then(()=>loadSettings()).catch(()=>{});
-}
-function editProfile(name,g,a,h){
-  document.getElementById('pf_name').value=name;
-  document.getElementById('pf_gender').value=g;
-  document.getElementById('pf_age').value=a;
-  document.getElementById('pf_height').value=h;
-}
-loadSettings();
-document.querySelectorAll('form[action="/save/mqtt"],form[action="/save/http"]').forEach(function(f){
-  f.onsubmit=function(e){
-    e.preventDefault();
-    var fd=new FormData(f);
-    var id=f.action.includes('mqtt')?'mqtt-msg':'http-msg';
-    api(f.action,{method:'POST',body:new URLSearchParams(fd)})
-      .then(d=>{
-        var m=document.getElementById(id);
-        m.textContent=d.message;
-        m.className='msg '+(d.ok?'ok':'err');
-      }).catch(()=>{});
-  };
-});
-document.getElementById('profile-form').onsubmit=function(e){
-  e.preventDefault();
-  var fd=new FormData(this);
-  api('/save/profile',{method:'POST',body:new URLSearchParams(fd)})
-    .then(d=>{
-      var m=document.getElementById('profile-msg');
-      m.textContent=d.message;m.className='msg '+(d.ok?'ok':'err');
-      if(d.ok){document.getElementById('profile-form').reset();loadSettings();}
-    }).catch(()=>{});
-};
-</script>
-</body></html>
-)rawliteral";
+#include "config_page.h"
 
 const char WEIGHT_PAGE[] PROGMEM = R"rawliteral(
 <!DOCTYPE html>
@@ -578,9 +394,12 @@ const char WEIGHT_PAGE[] PROGMEM = R"rawliteral(
   .tile .label{font-size:clamp(10px,1.3vw,12px);color:#888;margin-bottom:6px}
   .tile .val{font-size:clamp(20px,3.5vw,28px);font-weight:bold;color:#4CAF50}
   .tile .unit{font-size:clamp(10px,1.3vw,13px);color:#666}
+  .section-label{color:#888;font-size:clamp(12px,1.5vw,14px);margin:18px 0 10px;text-align:center}
   .settings{margin-top:30px}
   .settings a{color:#888;font-size:clamp(13px,1.5vw,16px)}
   .no-profile{color:#888;font-size:14px;margin:20px 0}
+  .toast{position:fixed;top:12px;left:12px;background:#1b3a1b;color:#4CAF50;padding:8px 14px;border-radius:8px;font-size:13px;opacity:0;transition:opacity 0.3s;pointer-events:none;z-index:99;border:1px solid #4CAF50}
+  .toast.show{opacity:1}
 </style>
 </head><body>
 <h1>OpenTrackFit</h1>
@@ -589,51 +408,69 @@ const char WEIGHT_PAGE[] PROGMEM = R"rawliteral(
   <span class="val" id="weight">--.-</span> <span class="unit">kg</span>
 </div>
 <div class="meta" id="meta">Noch keine Messung</div>
-<div class="grid" id="tiles" style="display:none">
-  <div class="tile"><div class="label">BMI</div><div class="val" id="t_bmi">-</div></div>
-  <div class="tile"><div class="label">Koerperfett</div><div class="val" id="t_fat">-</div><div class="unit">%</div></div>
-  <div class="tile"><div class="label">Muskelanteil</div><div class="val" id="t_muscle">-</div><div class="unit">%</div></div>
-  <div class="tile"><div class="label">Koerperwasser</div><div class="val" id="t_water">-</div><div class="unit">%</div></div>
-  <div class="tile"><div class="label">Knochenmasse</div><div class="val" id="t_bone">-</div><div class="unit">kg</div></div>
-  <div class="tile"><div class="label">Grundumsatz</div><div class="val" id="t_bmr">-</div><div class="unit">kcal</div></div>
-  <div class="tile"><div class="label">Protein</div><div class="val" id="t_protein">-</div><div class="unit">%</div></div>
-  <div class="tile"><div class="label">Stoffw.-Alter</div><div class="val" id="t_age">-</div></div>
-  <div class="tile"><div class="label">Viszeralfett</div><div class="val" id="t_visceral">-</div></div>
-  <div class="tile"><div class="label">Subkutan. Fett</div><div class="val" id="t_subcut">-</div><div class="unit">%</div></div>
-  <div class="tile"><div class="label">Idealgewicht</div><div class="val" id="t_ideal">-</div><div class="unit">kg</div></div>
-  <div class="tile"><div class="label">Differenz</div><div class="val" id="t_control">-</div><div class="unit">kg</div></div>
-  <div class="tile"><div class="label">Fettmasse</div><div class="val" id="t_fatmass">-</div><div class="unit">kg</div></div>
-  <div class="tile"><div class="label">Fettfrei</div><div class="val" id="t_ffm">-</div><div class="unit">kg</div></div>
-  <div class="tile"><div class="label">Muskelmasse</div><div class="val" id="t_musclekg">-</div><div class="unit">kg</div></div>
+<div id="tiles" style="display:none">
+  <div class="grid">
+    <div class="tile"><div class="label">BMI</div><div class="val" id="t_bmi">-</div></div>
+    <div class="tile"><div class="label">Grundumsatz</div><div class="val" id="t_bmr">-</div><div class="unit">kcal</div></div>
+    <div class="tile"><div class="label">Idealgewicht</div><div class="val" id="t_ideal">-</div><div class="unit">kg</div></div>
+    <div class="tile"><div class="label">Differenz</div><div class="val" id="t_control">-</div><div class="unit">kg</div></div>
+    <div class="tile"><div class="label">Stoffw.-Alter</div><div class="val" id="t_age">-</div></div>
+    <div class="tile"><div class="label">Viszeralfett</div><div class="val" id="t_visceral">-</div></div>
+  </div>
+  <div class="section-label" id="bia-label">Koerperanalyse <span id="t_bia"></span></div>
+  <div class="grid">
+    <div class="tile"><div class="label">Koerperfett</div><div class="val" id="t_fat">-</div><div class="unit">%</div></div>
+    <div class="tile"><div class="label">Muskelanteil</div><div class="val" id="t_muscle">-</div><div class="unit">%</div></div>
+    <div class="tile"><div class="label">Koerperwasser</div><div class="val" id="t_water">-</div><div class="unit">%</div></div>
+    <div class="tile"><div class="label">Knochenmasse</div><div class="val" id="t_bone">-</div><div class="unit">kg</div></div>
+    <div class="tile"><div class="label">Protein</div><div class="val" id="t_protein">-</div><div class="unit">%</div></div>
+    <div class="tile"><div class="label">Subkutan. Fett</div><div class="val" id="t_subcut">-</div><div class="unit">%</div></div>
+    <div class="tile"><div class="label">Fettmasse</div><div class="val" id="t_fatmass">-</div><div class="unit">kg</div></div>
+    <div class="tile"><div class="label">Fettfrei</div><div class="val" id="t_ffm">-</div><div class="unit">kg</div></div>
+    <div class="tile"><div class="label">Muskelmasse</div><div class="val" id="t_musclekg">-</div><div class="unit">kg</div></div>
+  </div>
 </div>
 <div id="no-profile" style="display:none;color:#888;font-size:14px;margin:20px 0;text-align:center">Profil in <a href="/setup" style="color:#4CAF50">Einstellungen</a> anlegen fuer Koerperanalyse</div>
 <div class="settings"><a href="/setup">Einstellungen</a></div>
+<div class="toast" id="toast"></div>
 <script>
 function f1(v){return v.toFixed(1)}
+function v1(x){return x!==null?f1(x):'k.A.'}
+var lastTime='';
+function showToast(msg){
+  var t=document.getElementById('toast');
+  t.textContent=msg;t.classList.add('show');
+  setTimeout(function(){t.classList.remove('show')},3000);
+}
 function load(){
   fetch('/api/last-weight-data').then(r=>r.json()).then(d=>{
     if(d.profile) document.getElementById('profile-name').textContent=d.profile;
     if(d.weight>0){
       document.getElementById('weight').textContent=f1(d.weight);
       document.getElementById('meta').textContent=d.time?'Letzte Messung: '+d.time:'Letzte Messung';
+      if(d.time&&d.time!==lastTime){if(lastTime)showToast('Neue Messung: '+d.time);lastTime=d.time;}
       if(d.bmi){
-        document.getElementById('tiles').style.display='grid';
+        document.getElementById('tiles').style.display='block';
         document.getElementById('no-profile').style.display='none';
         document.getElementById('t_bmi').textContent=f1(d.bmi);
-        document.getElementById('t_fat').textContent=f1(d.body_fat_pct);
-        document.getElementById('t_muscle').textContent=f1(d.muscle_pct);
-        document.getElementById('t_water').textContent=f1(d.water_pct);
-        document.getElementById('t_bone').textContent=f1(d.bone_mass);
+        document.getElementById('t_fat').textContent=v1(d.body_fat_pct);
+        document.getElementById('t_muscle').textContent=v1(d.muscle_pct);
+        document.getElementById('t_water').textContent=v1(d.water_pct);
+        document.getElementById('t_bone').textContent=v1(d.bone_mass);
         document.getElementById('t_bmr').textContent=d.bmr;
-        document.getElementById('t_protein').textContent=f1(d.protein_pct);
+        document.getElementById('t_protein').textContent=v1(d.protein_pct);
         document.getElementById('t_age').textContent=d.metabolic_age;
         document.getElementById('t_visceral').textContent=d.visceral_fat;
-        document.getElementById('t_subcut').textContent=f1(d.subcutaneous_fat_pct);
+        document.getElementById('t_subcut').textContent=v1(d.subcutaneous_fat_pct);
         document.getElementById('t_ideal').textContent=f1(d.ideal_weight);
-        document.getElementById('t_control').textContent=(d.weight_control>0?'+':'')+f1(d.weight_control);
-        document.getElementById('t_fatmass').textContent=f1(d.fat_mass);
-        document.getElementById('t_ffm').textContent=f1(d.fat_free_weight);
-        document.getElementById('t_musclekg').textContent=f1(d.muscle_mass);
+        document.getElementById('t_control').textContent=d.weight_control!==null?(d.weight_control>0?'+':'')+f1(d.weight_control):'k.A.';
+        document.getElementById('t_fatmass').textContent=v1(d.fat_mass);
+        document.getElementById('t_ffm').textContent=v1(d.fat_free_weight);
+        document.getElementById('t_musclekg').textContent=v1(d.muscle_mass);
+        var ba=document.getElementById('t_bia');
+        var bl=document.getElementById('bia-label');
+        if(d.body_analysis){ba.textContent='\u2714';ba.style.color='#4CAF50';bl.style.color='#4CAF50';}
+        else{ba.textContent='\u2718';ba.style.color='#f44';bl.style.color='#888';}
       } else {
         document.getElementById('no-profile').style.display='block';
       }
@@ -849,8 +686,7 @@ void handleApiWeight() {
     if (bodyData.weight > 0) {
         server.send(200, "application/json", buildBodyJson());
     } else {
-        server.send(200, "application/json",
-            "{\"weight\":" + String(finalWeight, 1) + ",\"time\":\"" + String(finalWeightTime) + "\"}");
+        server.send(200, "application/json", "{\"weight\":0}");
     }
 }
 
@@ -889,6 +725,7 @@ void handleApiDocs() {
               "\"weight\":\"Gewicht in kg\","
               "\"time\":\"Zeitpunkt (dd.mm.yyyy HH:MM)\","
               "\"profile\":\"Name des aktiven Profils\","
+              "\"impedance\":\"BIA-Impedanz in Ohm (nur bei barfuss-Messung)\","
               "\"bmi\":\"Body Mass Index\","
               "\"body_fat_pct\":\"Koerperfettanteil in %\","
               "\"muscle_pct\":\"Muskelanteil in %\","
@@ -904,10 +741,12 @@ void handleApiDocs() {
               "\"ideal_weight\":\"Standardgewicht in kg\","
               "\"weight_control\":\"Gewichtskontrolle in kg\","
               "\"fat_mass\":\"Fettmasse in kg\","
-              "\"fat_free_weight\":\"Fettfreies Gewicht in kg\""
+              "\"fat_free_weight\":\"Fettfreies Gewicht in kg\","
+              "\"body_analysis\":\"true wenn BIA-Koerperanalyse verfuegbar, false wenn nicht (z.B. Socken)\""
             "},"
-            "\"note\":\"Koerperanalyse-Felder nur verfuegbar wenn Profil (Alter, Groesse, Geschlecht) gesetzt ist\""
+            "\"note\":\"Alle Felder ausser weight und time erfordern ein Profil. body_analysis zeigt ob BIA-Impedanzmessung erfolgreich war. BIA-abhaengige Felder (body_fat_pct, muscle_pct, water_pct, bone_mass, protein_pct, protein_mass, subcutaneous_fat_pct, fat_mass, fat_free_weight, muscle_mass) sind null wenn body_analysis=false. Immer verfuegbar mit Profil: bmi, bmr, metabolic_age, visceral_fat, ideal_weight, weight_control. impedance nur vorhanden bei barfuss-Messung.\""
           "},"
+          "\"GET /api/settings\":{\"description\":\"Aktuelle Einstellungen und Profile\"},"
           "\"GET /api/docs\":{\"description\":\"Diese API-Dokumentation\"}"
         "}"
         "}");
@@ -935,6 +774,10 @@ class ClientCallbacks : public BLEClientCallbacks {
     void onConnect(BLEClient* client) override {}
     void onDisconnect(BLEClient* client) override {
         connected = false;
+        if (weightReady) {
+            weightReady = false;
+            doForward = true;
+        }
         Serial.println("\n>> Scale disconnected. Rescanning...");
     }
 };
@@ -948,34 +791,54 @@ void logRawData(const char* source, uint8_t* data, size_t length) {
 }
 
 void parseScaleData(uint8_t* data, size_t length, const char* source) {
-    logRawData(source, data, length);
+    // logRawData(source, data, length);  // uncomment for BLE packet hex dump
 
-    // Known weight packet: AC 02, 8 bytes
-    if (length >= 8 && data[0] == 0xAC && data[1] == 0x02) {
-        uint8_t type = data[6];
+    if (length < 8 || data[0] != 0xAC || data[1] != 0x02) return;
 
-        uint8_t sum = 0;
-        for (int i = 2; i <= 6; i++) sum += data[i];
-        if (sum != data[7]) return;
+    uint8_t type = data[6];
 
-        if (type != PKT_LIVE && type != PKT_STABLE) return;
+    uint8_t sum = 0;
+    for (int i = 2; i <= 6; i++) sum += data[i];
+    if ((uint8_t)sum != data[7]) return;
 
+    if (type == PKT_LIVE || type == PKT_STABLE) {
+        // Weight packet
         uint16_t raw = (data[2] << 8) | data[3];
         float weight = raw / 10.0f;
 
         if (type == PKT_STABLE) {
             finalWeight = weight;
+            impedanceRaw = 0;  // reset for new measurement
             struct tm ti;
             if (getLocalTime(&ti, 0)) {
-                strftime(finalWeightTime, sizeof(finalWeightTime), "%d.%m.%Y %H:%M", &ti);
+                strftime(finalWeightTime, sizeof(finalWeightTime), "%d.%m.%Y %H:%M:%S", &ti);
             } else {
                 strcpy(finalWeightTime, "");
             }
-            Serial.printf(">>> FINAL WEIGHT: %.1f kg <<<\n", weight);
-            doForward = true;
+            Serial.printf("\n>>> FINAL WEIGHT: %.1f kg <<<\n", weight);
+            weightReady = true;
         } else {
-            Serial.printf("  Measuring: %.1f kg\n", weight);
+            Serial.print(".");
         }
+    } else if (type == 0xCB) {
+        // Post-measurement CB packet
+        if (data[2] == 0xFD && data[3] == 0x01) {
+            // Impedance data packet — last CB packet for barefoot measurements
+            uint16_t imp = (data[4] << 8) | data[5];
+            if (imp > 0) {
+                impedanceRaw = imp;
+                Serial.printf(">>> IMPEDANCE: %d ohms <<<\n", imp);
+            }
+            // Forward now — FD 01 is the last relevant packet (barefoot)
+            if (weightReady) {
+                weightReady = false;
+                doForward = true;
+            }
+        }
+    } else if (type == 0xCC && weightReady) {
+        // CC packet after CB sequence — all data collected, trigger forward
+        weightReady = false;
+        doForward = true;
     }
 }
 
@@ -1117,7 +980,7 @@ void loop() {
         }
     }
 
-    // Forward weight (deferred from BLE callback to main loop)
+    // Forward weight (deferred from BLE disconnect to main loop)
     if (doForward) {
         doForward = false;
         forwardWeight(finalWeight, finalWeightTime);

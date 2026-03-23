@@ -1,127 +1,235 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 520" font-family="system-ui, -apple-system, sans-serif">
+<?xml version="1.0" encoding="UTF-8"?>
+<svg id="Ebene_1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" version="1.1" viewBox="0 0 900 520">
+  <!-- Generator: Adobe Illustrator 30.2.1, SVG Export Plug-In . SVG Version: 2.1.1 Build 1)  -->
   <defs>
-    <marker id="arrow" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
-      <path d="M0,0 L8,3 L0,6" fill="#555"/>
-    </marker>
+    <style>
+      .st0, .st1 {
+        fill: none;
+      }
+
+      .st2, .st3 {
+        stroke: #222;
+      }
+
+      .st2, .st4 {
+        fill: #151515;
+      }
+
+      .st3 {
+        fill: #111;
+      }
+
+      .st5 {
+        letter-spacing: 0em;
+      }
+
+      .st5, .st6, .st7, .st8, .st9, .st10, .st11, .st12 {
+        font-family: MyriadPro-Regular, 'Myriad Pro';
+      }
+
+      .st6 {
+        letter-spacing: 0em;
+      }
+
+      .st13 {
+        font-size: 14px;
+      }
+
+      .st13, .st14, .st15, .st16, .st17, .st9, .st18, .st19, .st20, .st11, .st21, .st22, .st23, .st24, .st25, .st12 {
+        isolation: isolate;
+      }
+
+      .st13, .st16, .st17, .st19, .st20, .st21, .st23, .st24, .st25 {
+        font-family: Helvetica-Bold, Helvetica;
+        font-weight: 700;
+      }
+
+      .st13, .st16, .st17, .st23, .st25 {
+        fill: #ccc;
+      }
+
+      .st26 {
+        font-family: AppleBraille-Outline6Dot, 'Apple Braille';
+      }
+
+      .st14, .st15, .st9, .st18, .st11 {
+        fill: #666;
+      }
+
+      .st14, .st11, .st12 {
+        font-size: 9px;
+      }
+
+      .st4, .st27, .st1 {
+        stroke: #444;
+      }
+
+      .st4, .st1, .st28 {
+        stroke-width: 1.5px;
+      }
+
+      .st15, .st17, .st21 {
+        font-size: 11px;
+      }
+
+      .st7 {
+        letter-spacing: 0em;
+      }
+
+      .st16, .st24 {
+        font-size: 13px;
+      }
+
+      .st8 {
+        letter-spacing: 0em;
+      }
+
+      .st9, .st18, .st19, .st22, .st25 {
+        font-size: 10px;
+      }
+
+      .st19, .st21, .st24 {
+        fill: #bbb;
+      }
+
+      .st27, .st29 {
+        fill: #1a1a1a;
+      }
+
+      .st20 {
+        fill: #ddd;
+        font-size: 15px;
+      }
+
+      .st22, .st30, .st12 {
+        fill: #555;
+      }
+
+      .st23 {
+        font-size: 20px;
+      }
+
+      .st29, .st28 {
+        stroke: #333;
+      }
+
+      .st28 {
+        fill: #181818;
+      }
+    </style>
   </defs>
-
-  <!-- Background -->
-  <rect width="900" height="520" rx="12" fill="#111" stroke="#222" stroke-width="1"/>
-  <text x="450" y="36" text-anchor="middle" fill="#ccc" font-size="20" font-weight="bold">OpenTrackFit — Architecture</text>
-
-  <!-- BLE Scale -->
-  <rect x="30" y="70" width="160" height="100" rx="10" fill="#181818" stroke="#333" stroke-width="1.5"/>
-  <text x="110" y="100" text-anchor="middle" fill="#ccc" font-size="14" font-weight="bold">BLE Scale</text>
-  <text x="110" y="120" text-anchor="middle" fill="#666" font-size="11">FitTrack / SWAN</text>
-  <text x="110" y="138" text-anchor="middle" fill="#555" font-size="10">Service 0xFFB0</text>
-  <text x="110" y="155" text-anchor="middle" fill="#555" font-size="10">FFB2 Notify</text>
-
-  <!-- Arrow BLE → ESP32 -->
-  <line x1="190" y1="120" x2="268" y2="120" stroke="#555" stroke-width="1.5" marker-end="url(#arrow)"/>
-  <text x="229" y="112" text-anchor="middle" fill="#666" font-size="9">BLE</text>
-
-  <!-- ESP32 Main Box -->
-  <rect x="270" y="55" width="340" height="290" rx="10" fill="#151515" stroke="#444" stroke-width="1.5"/>
-  <text x="440" y="80" text-anchor="middle" fill="#ddd" font-size="15" font-weight="bold">ESP32</text>
-
-  <!-- BLE Parser -->
-  <rect x="290" y="95" width="130" height="50" rx="6" fill="#1a1a1a" stroke="#444" stroke-width="1"/>
-  <text x="355" y="117" text-anchor="middle" fill="#ccc" font-size="11" font-weight="bold">BLE Parser</text>
-  <text x="355" y="133" text-anchor="middle" fill="#666" font-size="9">CE/CA/CB/CC</text>
-
-  <!-- Body Composition -->
-  <rect x="290" y="160" width="130" height="50" rx="6" fill="#1a1a1a" stroke="#444" stroke-width="1"/>
-  <text x="355" y="180" text-anchor="middle" fill="#ccc" font-size="11" font-weight="bold">Body Analysis</text>
-  <text x="355" y="196" text-anchor="middle" fill="#666" font-size="9">BIA / Kushner</text>
-
-  <!-- Web Server -->
-  <rect x="460" y="95" width="130" height="50" rx="6" fill="#1a1a1a" stroke="#333" stroke-width="1"/>
-  <text x="525" y="117" text-anchor="middle" fill="#bbb" font-size="11" font-weight="bold">Web Server</text>
-  <text x="525" y="133" text-anchor="middle" fill="#666" font-size="9">Home / Settings</text>
-
-  <!-- REST API -->
-  <rect x="460" y="160" width="130" height="50" rx="6" fill="#1a1a1a" stroke="#333" stroke-width="1"/>
-  <text x="525" y="180" text-anchor="middle" fill="#bbb" font-size="11" font-weight="bold">REST API</text>
-  <text x="525" y="196" text-anchor="middle" fill="#666" font-size="9">/api/last-weight-data</text>
-
-  <!-- NVS Profiles -->
-  <rect x="290" y="230" width="130" height="45" rx="6" fill="#1a1a1a" stroke="#333" stroke-width="1"/>
-  <text x="355" y="250" text-anchor="middle" fill="#bbb" font-size="11" font-weight="bold">NVS Storage</text>
-  <text x="355" y="265" text-anchor="middle" fill="#666" font-size="9">Profiles / Settings</text>
-
-  <!-- WiFi -->
-  <rect x="460" y="230" width="130" height="45" rx="6" fill="#1a1a1a" stroke="#333" stroke-width="1"/>
-  <text x="525" y="250" text-anchor="middle" fill="#bbb" font-size="11" font-weight="bold">WiFi</text>
-  <text x="525" y="265" text-anchor="middle" fill="#666" font-size="9">STA + AP Fallback</text>
-
-  <!-- Internal arrows -->
-  <line x1="355" y1="145" x2="355" y2="158" stroke="#555" stroke-width="1" marker-end="url(#arrow)"/>
-  <line x1="420" y1="185" x2="458" y2="185" stroke="#444" stroke-width="1" marker-end="url(#arrow)"/>
-  <line x1="355" y1="210" x2="355" y2="228" stroke="#444" stroke-width="1" marker-end="url(#arrow)"/>
-
-  <!-- MQTT Broker -->
-  <rect x="700" y="70" width="170" height="70" rx="10" fill="#181818" stroke="#333" stroke-width="1.5"/>
-  <text x="785" y="98" text-anchor="middle" fill="#bbb" font-size="13" font-weight="bold">MQTT Broker</text>
-  <text x="785" y="118" text-anchor="middle" fill="#666" font-size="10">PubSubClient</text>
-
-  <!-- HTTP Webhook -->
-  <rect x="700" y="160" width="170" height="70" rx="10" fill="#181818" stroke="#333" stroke-width="1.5"/>
-  <text x="785" y="188" text-anchor="middle" fill="#bbb" font-size="13" font-weight="bold">HTTP Webhook</text>
-  <text x="785" y="208" text-anchor="middle" fill="#666" font-size="10">POST JSON</text>
-
-  <!-- Browser -->
-  <rect x="700" y="260" width="170" height="70" rx="10" fill="#181818" stroke="#333" stroke-width="1.5"/>
-  <text x="785" y="288" text-anchor="middle" fill="#bbb" font-size="13" font-weight="bold">Browser</text>
-  <text x="785" y="308" text-anchor="middle" fill="#666" font-size="10">Home / Settings UI</text>
-
-  <!-- Arrows ESP32 → Output -->
-  <line x1="610" y1="105" x2="698" y2="105" stroke="#555" stroke-width="1.5" marker-end="url(#arrow)"/>
-  <text x="654" y="98" text-anchor="middle" fill="#666" font-size="9">JSON</text>
-
-  <line x1="610" y1="195" x2="698" y2="195" stroke="#555" stroke-width="1.5" marker-end="url(#arrow)"/>
-  <text x="654" y="188" text-anchor="middle" fill="#666" font-size="9">JSON</text>
-
-  <line x1="610" y1="275" x2="698" y2="295" stroke="#444" stroke-width="1.5" marker-end="url(#arrow)"/>
-  <text x="654" y="275" text-anchor="middle" fill="#555" font-size="9">HTTP</text>
-
-  <!-- Measurement Flow -->
-  <rect x="30" y="380" width="840" height="120" rx="10" fill="#151515" stroke="#222" stroke-width="1"/>
-  <text x="450" y="405" text-anchor="middle" fill="#ccc" font-size="13" font-weight="bold">Measurement Flow</text>
-
-  <!-- Flow steps -->
-  <rect x="50" y="420" width="100" height="55" rx="6" fill="#1a1a1a" stroke="#444" stroke-width="1"/>
-  <text x="100" y="443" text-anchor="middle" fill="#ccc" font-size="10" font-weight="bold">CE Packets</text>
-  <text x="100" y="460" text-anchor="middle" fill="#666" font-size="9">Live Weight</text>
-
-  <line x1="150" y1="447" x2="178" y2="447" stroke="#555" stroke-width="1" marker-end="url(#arrow)"/>
-
-  <rect x="180" y="420" width="100" height="55" rx="6" fill="#1a1a1a" stroke="#444" stroke-width="1"/>
-  <text x="230" y="443" text-anchor="middle" fill="#ccc" font-size="10" font-weight="bold">CA Packet</text>
-  <text x="230" y="460" text-anchor="middle" fill="#666" font-size="9">Final Weight</text>
-
-  <line x1="280" y1="447" x2="308" y2="447" stroke="#555" stroke-width="1" marker-end="url(#arrow)"/>
-
-  <rect x="310" y="420" width="120" height="55" rx="6" fill="#1a1a1a" stroke="#444" stroke-width="1"/>
-  <text x="370" y="443" text-anchor="middle" fill="#ccc" font-size="10" font-weight="bold">CB Packets</text>
-  <text x="370" y="460" text-anchor="middle" fill="#666" font-size="9">FD01 = Impedance</text>
-
-  <line x1="430" y1="447" x2="458" y2="447" stroke="#555" stroke-width="1" marker-end="url(#arrow)"/>
-
-  <rect x="460" y="420" width="120" height="55" rx="6" fill="#1a1a1a" stroke="#333" stroke-width="1"/>
-  <text x="520" y="440" text-anchor="middle" fill="#bbb" font-size="10" font-weight="bold">Forward</text>
-  <text x="520" y="455" text-anchor="middle" fill="#666" font-size="9">FD01 / CC /</text>
-  <text x="520" y="467" text-anchor="middle" fill="#666" font-size="9">Disconnect</text>
-
-  <line x1="580" y1="447" x2="608" y2="447" stroke="#555" stroke-width="1" marker-end="url(#arrow)"/>
-
-  <rect x="610" y="420" width="120" height="55" rx="6" fill="#1a1a1a" stroke="#444" stroke-width="1"/>
-  <text x="670" y="443" text-anchor="middle" fill="#ccc" font-size="10" font-weight="bold">Calculate</text>
-  <text x="670" y="460" text-anchor="middle" fill="#666" font-size="9">Body Composition</text>
-
-  <line x1="730" y1="447" x2="758" y2="447" stroke="#555" stroke-width="1" marker-end="url(#arrow)"/>
-
-  <rect x="760" y="420" width="95" height="55" rx="6" fill="#1a1a1a" stroke="#333" stroke-width="1"/>
-  <text x="807" y="440" text-anchor="middle" fill="#bbb" font-size="10" font-weight="bold">Publish</text>
-  <text x="807" y="455" text-anchor="middle" fill="#666" font-size="9">MQTT / HTTP</text>
-  <text x="807" y="467" text-anchor="middle" fill="#666" font-size="9">/ API</text>
+  <rect class="st3" y="0" width="900" height="520" rx="12" ry="12"/>
+  <text class="st23" transform="translate(324.2 36)"><tspan x="0" y="0">OpenScale — Architecture</tspan></text>
+  <rect class="st28" x="30" y="70" width="160" height="100" rx="10" ry="10"/>
+  <text class="st13" transform="translate(75.8 100)"><tspan x="0" y="0">BLE Scale</tspan></text>
+  <text class="st15" transform="translate(81.8 120)"><tspan class="st10" x="0" y="0">FitTrack</tspan><tspan class="st26" x="36" y="0"> </tspan><tspan class="st10" x="39.8" y="0">/</tspan><tspan class="st26" x="43.6" y="0"> </tspan><tspan class="st10" x="47.3" y="0">SWAN</tspan></text>
+  <text class="st22" transform="translate(86.1 138)"><tspan class="st10" x="0" y="0">Service</tspan><tspan class="st26" x="29.8" y="0"> </tspan><tspan class="st10" x="33.3" y="0">0xFFB0</tspan></text>
+  <text class="st22" transform="translate(91.2 155)"><tspan class="st10" x="0" y="0">FFB2</tspan><tspan class="st26" x="20.3" y="0"> </tspan><tspan class="st10" x="23.7" y="0">Notify</tspan></text>
+  <path class="st0" d=""/>
+  <path class="st30" d="M256,115.5l12,4.5-12,4.5"/>
+  <path class="st30" d="M268,120" marker-end="url(#arrow)"/>
+  <text class="st11" transform="translate(224.4 112)"><tspan x="0" y="0">BLE</tspan></text>
+  <rect class="st4" x="270" y="55" width="340" height="290" rx="10" ry="10"/>
+  <text class="st20" transform="translate(416.7 80)"><tspan x="0" y="0">ESP32</tspan></text>
+  <rect class="st27" x="290" y="95" width="130" height="50" rx="6" ry="6"/>
+  <text class="st17" transform="translate(325.3 117)"><tspan x="0" y="0">BLE Parser</tspan></text>
+  <text class="st11" transform="translate(330.1 133)"><tspan x="0" y="0">CE/CA/CB/CC</tspan></text>
+  <rect class="st27" x="290" y="160" width="130" height="50" rx="6" ry="6"/>
+  <text class="st17" transform="translate(317.3 180)"><tspan x="0" y="0">Body Analysis</tspan></text>
+  <text class="st14" transform="translate(335 196)"><tspan class="st10" x="0" y="0">BIA</tspan><tspan class="st26" x="12.5" y="0"> </tspan><tspan class="st10" x="15.6" y="0">/</tspan><tspan class="st26" x="18.7" y="0"> </tspan><tspan class="st10" x="21.8" y="0">Kushner</tspan></text>
+  <rect class="st29" x="460" y="95" width="130" height="50" rx="6" ry="6"/>
+  <text class="st21" transform="translate(494.8 117)"><tspan x="0" y="0">Web Server</tspan></text>
+  <text class="st14" transform="translate(501.9 133)"><tspan class="st10" x="0" y="0">Home</tspan><tspan class="st26" x="22.8" y="0"> </tspan><tspan class="st10" x="25.9" y="0">/</tspan><tspan class="st26" x="29" y="0"> </tspan><tspan class="st10" x="32.1" y="0">Settings</tspan></text>
+  <rect class="st29" x="460" y="160" width="130" height="50" rx="6" ry="6"/>
+  <text class="st21" transform="translate(499.8 180)"><tspan x="0" y="0">REST API</tspan></text>
+  <text class="st11" transform="translate(492.7 196)"><tspan x="0" y="0">/api/last-weight-data</tspan></text>
+  <rect class="st29" x="290" y="230" width="130" height="45" rx="6" ry="6"/>
+  <text class="st21" transform="translate(321.7 250)"><tspan x="0" y="0">NVS Storage</tspan></text>
+  <text class="st14" transform="translate(325.8 265)"><tspan class="st10" x="0" y="0">Profiles</tspan><tspan class="st26" x="27.6" y="0"> </tspan><tspan class="st10" x="30.7" y="0">/</tspan><tspan class="st26" x="33.7" y="0"> </tspan><tspan class="st10" x="36.8" y="0">Settings</tspan></text>
+  <rect class="st29" x="460" y="230" width="130" height="45" rx="6" ry="6"/>
+  <text class="st21" transform="translate(513.4 250)"><tspan x="0" y="0">WiFi</tspan></text>
+  <text class="st14" transform="translate(498.9 265)"><tspan class="st10" x="0" y="0">STA</tspan><tspan class="st26" x="14.4" y="0"> </tspan><tspan class="st10" x="17.5" y="0">+</tspan><tspan class="st26" x="22.9" y="0"> </tspan><tspan class="st6" x="25.9" y="0">AP</tspan><tspan class="st26" x="36.2" y="0"> </tspan><tspan class="st6" x="39.3" y="0">Fallback</tspan></text>
+  <path class="st0" d=""/>
+  <path class="st30" d="M358,150l-3,8-3-8"/>
+  <path class="st30" d="M355,158" marker-end="url(#arrow)"/>
+  <path class="st0" d=""/>
+  <path class="st30" d="M450,182l8,3-8,3"/>
+  <path class="st30" d="M458,185" marker-end="url(#arrow)"/>
+  <path class="st0" d=""/>
+  <path class="st30" d="M358,220l-3,8-3-8"/>
+  <path class="st30" d="M355,228" marker-end="url(#arrow)"/>
+  <rect class="st28" x="700" y="70" width="170" height="70" rx="10" ry="10"/>
+  <text class="st24" transform="translate(743.8 98)"><tspan x="0" y="0">MQTT Broker</tspan></text>
+  <text/>
+  <rect class="st28" x="700" y="160" width="170" height="70" rx="10" ry="10"/>
+  <text class="st24" transform="translate(737.2 188)"><tspan x="0" y="0">HTTP Webhook</tspan></text>
+  <text class="st9" transform="translate(771.6 208)"><tspan x="0" y="0">POST</tspan></text>
+  <rect class="st28" x="700" y="260" width="170" height="70" rx="10" ry="10"/>
+  <text class="st24" transform="translate(732.4 288.2)"><tspan x="0" y="0">Browser</tspan></text>
+  <path class="st0" d=""/>
+  <path class="st30" d="M686,100.5l12,4.5-12,4.5"/>
+  <path class="st30" d="M698,105" marker-end="url(#arrow)"/>
+  <image width="1116" height="1656" transform="translate(822.2 265) scale(0)" xlink:href="screenshot.png"/>
+  <text class="st11" transform="translate(647.8 98)"><tspan x="0" y="0">JSON</tspan></text>
+  <path class="st0" d=""/>
+  <path class="st30" d="M686,190.5l12,4.5-12,4.5"/>
+  <path class="st30" d="M698,195" marker-end="url(#arrow)"/>
+  <text class="st11" transform="translate(647.8 188)"><tspan x="0" y="0">JSON</tspan></text>
+  <path class="st0" d=""/>
+  <path class="st30" d="M688.2,288.7l9.2,8.9-12.8-.7"/>
+  <path class="st30" d="M698,295" marker-end="url(#arrow)"/>
+  <text class="st18" transform="translate(732.3 307.3)"><tspan class="st10" x="0" y="0">Web</tspan><tspan class="st26" x="19.2" y="0"> </tspan><tspan class="st10" x="22.6" y="0">GUI</tspan><tspan class="st26" x="37.9" y="0"> </tspan><tspan class="st10" x="0" y="12">(Settings</tspan><tspan class="st26" x="36.8" y="12"> </tspan><tspan class="st5" x="40.3" y="12">&amp;</tspan><tspan class="st26" x="46.3" y="12"> </tspan><tspan class="st7" x="49.7" y="12">Weight)</tspan></text>
+  <text class="st12" transform="translate(647.8 275)"><tspan x="0" y="0">HTTP</tspan></text>
+  <rect class="st2" x="30" y="380" width="840" height="120" rx="10" ry="10"/>
+  <text class="st16" transform="translate(391.5 405)"><tspan x="0" y="0">Measurement Flow</tspan></text>
+  <rect class="st27" x="50" y="420" width="100" height="55" rx="6" ry="6"/>
+  <text class="st25" transform="translate(72.8 443)"><tspan x="0" y="0">CE Packets</tspan></text>
+  <text class="st14" transform="translate(76.9 460)"><tspan class="st10" x="0" y="0">Live</tspan><tspan class="st26" x="15.2" y="0"> </tspan><tspan class="st6" x="18.3" y="0">Weight</tspan></text>
+  <path class="st0" d=""/>
+  <path class="st30" d="M170,444l8,3-8,3"/>
+  <path class="st30" d="M178,447" marker-end="url(#arrow)"/>
+  <rect class="st27" x="180" y="420" width="100" height="55" rx="6" ry="6"/>
+  <text class="st25" transform="translate(205.4 443)"><tspan x="0" y="0">CA Packet</tspan></text>
+  <text class="st14" transform="translate(205.9 460)"><tspan class="st10" x="0" y="0">Final</tspan><tspan class="st26" x="17.9" y="0"> </tspan><tspan class="st10" x="21" y="0">Weight</tspan></text>
+  <path class="st0" d=""/>
+  <path class="st30" d="M300,444l8,3-8,3"/>
+  <path class="st30" d="M308,447" marker-end="url(#arrow)"/>
+  <rect class="st27" x="310" y="420" width="120" height="55" rx="6" ry="6"/>
+  <text class="st25" transform="translate(342.5 443)"><tspan x="0" y="0">CB Packets</tspan></text>
+  <text class="st14" transform="translate(335.3 460)"><tspan class="st10" x="0" y="0">FD01</tspan><tspan class="st26" x="19.6" y="0"> </tspan><tspan class="st6" x="22.7" y="0">=</tspan><tspan class="st26" x="28.1" y="0"> </tspan><tspan class="st10" x="31.1" y="0">Impedance</tspan></text>
+  <path class="st0" d=""/>
+  <path class="st30" d="M450,444l8,3-8,3"/>
+  <path class="st30" d="M458,447" marker-end="url(#arrow)"/>
+  <rect class="st29" x="460" y="420" width="120" height="55" rx="6" ry="6"/>
+  <text class="st19" transform="translate(500.3 440)"><tspan x="0" y="0">Forward</tspan></text>
+  <text class="st14" transform="translate(498.5 455.4)"><tspan class="st10" x="0" y="0">FD01</tspan><tspan class="st26" x="19.6" y="0"> </tspan><tspan class="st10" x="22.7" y="0">/</tspan><tspan class="st26" x="25.8" y="0"> </tspan><tspan class="st6" x="28.8" y="0">CC</tspan><tspan class="st26" x="39.3" y="0"> </tspan><tspan class="st10" x="42.4" y="0">/</tspan></text>
+  <text class="st11" transform="translate(499.2 467)"><tspan x="0" y="0">Disconnect</tspan></text>
+  <path class="st0" d=""/>
+  <path class="st30" d="M600,444l8,3-8,3"/>
+  <path class="st30" d="M608,447" marker-end="url(#arrow)"/>
+  <rect class="st27" x="610" y="420" width="120" height="55" rx="6" ry="6"/>
+  <text class="st25" transform="translate(647.8 443)"><tspan x="0" y="0">Calculate</tspan></text>
+  <text class="st14" transform="translate(633 460)"><tspan class="st10" x="0" y="0">Body</tspan><tspan class="st26" x="19.1" y="0"> </tspan><tspan class="st10" x="22.2" y="0">Composition</tspan></text>
+  <path class="st0" d=""/>
+  <path class="st30" d="M750,444l8,3-8,3"/>
+  <path class="st30" d="M758,447" marker-end="url(#arrow)"/>
+  <rect class="st29" x="760" y="420" width="95" height="55" rx="6" ry="6"/>
+  <text class="st19" transform="translate(788.9 440)"><tspan x="0" y="0">Publish</tspan></text>
+  <text class="st14" transform="translate(785 453.6)"><tspan class="st10" x="0" y="0">MQTT</tspan><tspan class="st26" x="22.4" y="0"> </tspan><tspan class="st10" x="25.5" y="0">/</tspan><tspan class="st26" x="28.5" y="0"> </tspan><tspan class="st8" x="31.6" y="0">HTTP</tspan></text>
+  <text class="st14" transform="translate(799.3 467.1)"><tspan class="st10" x="0" y="0">/</tspan><tspan class="st26" x="3.1" y="0"> </tspan><tspan class="st10" x="6.2" y="0">API</tspan></text>
+  <image width="500" height="500" transform="translate(501.9 238.2) scale(.3)" xlink:href="esp32.png"/>
+  <image width="500" height="500" transform="translate(42 161.9) rotate(-9.9) scale(.3)" xlink:href="fitTrack.png"/>
+  <line class="st1" x1="687.9" y1="195" x2="607.9" y2="195"/>
+  <line class="st1" x1="686.9" y1="292.5" x2="607.4" y2="261.4"/>
+  <line class="st1" x1="256" y1="120" x2="188" y2="120"/>
+  <line class="st1" x1="449.5" y1="185" x2="420.5" y2="185"/>
+  <line class="st1" x1="355" y1="145" x2="355" y2="151"/>
+  <line class="st1" x1="355" y1="210" x2="355" y2="220"/>
+  <line class="st1" x1="149" y1="446.9" x2="169.9" y2="446.9"/>
+  <line class="st1" x1="279.1" y1="447" x2="300" y2="447"/>
+  <line class="st1" x1="429.1" y1="447" x2="450" y2="447"/>
+  <line class="st1" x1="579.1" y1="447" x2="600" y2="447"/>
+  <line class="st1" x1="729.1" y1="447" x2="750" y2="447"/>
+  <line class="st1" x1="686" y1="105" x2="606" y2="105"/>
+  <line class="st4" x1="492.4" y1="345" x2="581.8" y2="345"/>
 </svg>

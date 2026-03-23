@@ -1,4 +1,4 @@
-# OpenTrackFit
+# OpenScale
 
 ESP32-based bridge that reads weight data from a Bluetooth (BLE) body composition scale and makes it available via a local web interface, MQTT, and HTTP webhooks.
 
@@ -12,7 +12,7 @@ ESP32-based bridge that reads weight data from a Bluetooth (BLE) body compositio
 
 ### Compatible Scales
 
-OpenTrackFit works with BLE body composition scales that use the **ElinkThings/SWAN platform** (BLE service `0xFFB0`). Many affordable smart scales from different brands share this common hardware and protocol — they are manufactured by the same OEM in China and sold under various names.
+OpenScale works with BLE body composition scales that use the **ElinkThings/SWAN platform** (BLE service `0xFFB0`). Many affordable smart scales from different brands share this common hardware and protocol — they are manufactured by the same OEM in China and sold under various names.
 
 **Tested:**
 - FitTrack Dara (Model: FT-DARA-WH01-GL) — BLE chip: Dialog Semi DA14531
@@ -38,7 +38,7 @@ OpenTrackFit works with BLE body composition scales that use the **ElinkThings/S
 - REST API for external systems to poll measurement data
 - NTP time sync (CET/CEST timezone)
 - Auto-reconnect after scale powers off
-- mDNS support (`http://opentrackfit.local`)
+- mDNS support (`http://openscale.local`)
 
 ## Architecture
 
@@ -68,7 +68,7 @@ pio device monitor
 ### Initial WiFi Setup
 
 1. On first boot, the ESP32 creates a WiFi access point:
-   - **SSID**: `OpenTrackFit`
+   - **SSID**: `OpenScale`
    - **Password**: `12345678`
 2. Connect to the AP and open `http://192.168.4.1`
 3. Select your home WiFi network from the scan list (or enter manually) and enter the password
@@ -77,7 +77,7 @@ pio device monitor
 
 ### Usage
 
-1. Open `http://opentrackfit.local` (or the IP shown in the serial log)
+1. Open `http://openscale.local` (or the IP shown in the serial log)
 2. Step on the scale **barefoot** — the weight measurement begins automatically
 3. The final weight, body composition, and timestamp are displayed after the measurement stabilizes
 4. A toast notification appears when new data arrives
@@ -131,10 +131,10 @@ Example response (barefoot measurement):
 ## Serial Output
 
 ```
-=== OpenTrackFit ===
+=== OpenScale ===
 Mode:  LAN (Station)
 IP:    192.168.1.42
-mDNS:  http://opentrackfit.local
+mDNS:  http://openscale.local
 -----------------------------
 FitTrack found!
 Connecting to 03:b3:ec:c1:cf:24...
@@ -160,7 +160,7 @@ Connected. Waiting for measurement...
   Ideal Weight:   79.4 kg
   Weight Control: 22.7 kg
 ------------------------
-MQTT published to opentrackfit/weight
+MQTT published to openscale/weight
 HTTP POST https://example.com/webhook -> 200
 >> Scale disconnected. Rescanning...
 ```

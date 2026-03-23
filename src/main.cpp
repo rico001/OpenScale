@@ -11,7 +11,7 @@
 
 // --- Config ---
 #define SCALE_NAME      "FitTrack"
-#define AP_SSID         "OpenTrackFit"
+#define AP_SSID         "OpenScale"
 #define AP_PASSWORD     "12345678"
 #define AP_TIMEOUT_MS   300000
 #define WIFI_LOST_MS    60000
@@ -356,7 +356,7 @@ void forwardWeight(float weight, const char* time) {
     String broker = getPref("mqtt", "broker");
     if (!broker.isEmpty()) {
         String topic = getPref("mqtt", "topic");
-        if (topic.isEmpty()) topic = "opentrackfit/weight";
+        if (topic.isEmpty()) topic = "openscale/weight";
         uint16_t port = getPrefInt("mqtt", "port", 1883);
         String user = getPref("mqtt", "user");
         String pass = getPref("mqtt", "pass");
@@ -364,9 +364,9 @@ void forwardWeight(float weight, const char* time) {
         mqttClient.setServer(broker.c_str(), port);
         bool ok;
         if (!user.isEmpty()) {
-            ok = mqttClient.connect("OpenTrackFit", user.c_str(), pass.c_str());
+            ok = mqttClient.connect("OpenScale", user.c_str(), pass.c_str());
         } else {
-            ok = mqttClient.connect("OpenTrackFit");
+            ok = mqttClient.connect("OpenScale");
         }
         if (ok) {
             mqttClient.publish(topic.c_str(), json.c_str());
@@ -397,7 +397,7 @@ const char WEIGHT_PAGE[] PROGMEM = R"rawliteral(
 <!DOCTYPE html>
 <html><head>
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>OpenTrackFit</title>
+<title>OpenScale</title>
 <style>
   *{box-sizing:border-box}
   body{font-family:sans-serif;max-width:600px;margin:0 auto;padding:30px 16px;background:#111;color:#eee;text-align:center}
@@ -419,7 +419,7 @@ const char WEIGHT_PAGE[] PROGMEM = R"rawliteral(
   .toast.show{opacity:1}
 </style>
 </head><body>
-<h1>OpenTrackFit</h1>
+<h1>OpenScale</h1>
 <div id="history-link" style="display:none;margin-top:4px"><a id="history-href" href="#" style="color:#888;font-size:clamp(13px,1.5vw,15px);text-decoration:none">zur History</a></div>
 <div id="profile-name" style="color:#888;font-size:clamp(14px,2vw,18px);margin-top:6px"></div>
 <div class="hero">
@@ -590,7 +590,7 @@ void handleSaveWifi() {
             "<h2 style='color:#4CAF50'>Verbunden!</h2>"
             "<p>WLAN: " + ssid + "</p>"
             "<p>IP: <strong>" + ip + "</strong></p>"
-            "<p>mDNS: <strong>http://opentrackfit.local</strong></p>"
+            "<p>mDNS: <strong>http://openscale.local</strong></p>"
             "<p style='color:#888;margin-top:20px'>Neustart in 5s...</p></body></html>");
         delay(5000);
         ESP.restart();
@@ -747,7 +747,7 @@ void handleApiSettings() {
 void handleApiDocs() {
     server.send(200, "application/json",
         "{"
-        "\"name\":\"OpenTrackFit API\","
+        "\"name\":\"OpenScale API\","
         "\"version\":\"2.0\","
         "\"endpoints\":{"
           "\"GET /api/last-weight-data\":{"
@@ -945,7 +945,7 @@ bool connectToScale() {
 }
 
 void setupBLE() {
-    BLEDevice::init("OpenTrackFit");
+    BLEDevice::init("OpenScale");
     pBLEScan = BLEDevice::getScan();
     pBLEScan->setAdvertisedDeviceCallbacks(new ScanCallbacks(), false);
     pBLEScan->setActiveScan(true);
@@ -958,19 +958,19 @@ void setupBLE() {
 void setup() {
     Serial.begin(115200);
     delay(1000);
-    Serial.println("\n=== OpenTrackFit ===");
+    Serial.println("\n=== OpenScale ===");
 
     loadBodyData();
     setupBLE();
 
     if (connectWiFi()) {
         currentMode = MODE_STA;
-        MDNS.begin("opentrackfit");
+        MDNS.begin("openscale");
         setupWebServer();
         Serial.println("-----------------------------");
         Serial.println("Mode:  LAN (Station)");
         Serial.printf("IP:    %s\n", WiFi.localIP().toString().c_str());
-        Serial.println("mDNS:  http://opentrackfit.local");
+        Serial.println("mDNS:  http://openscale.local");
         Serial.println("-----------------------------");
     } else {
         startAP();
@@ -992,7 +992,7 @@ void loop() {
         stopAP();
         if (connectWiFi()) {
             currentMode = MODE_STA;
-            MDNS.begin("opentrackfit");
+            MDNS.begin("openscale");
             Serial.printf("WiFi reconnected. IP: %s\n", WiFi.localIP().toString().c_str());
         }
     }

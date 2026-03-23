@@ -7,7 +7,7 @@
 
   <!-- Background -->
   <rect width="900" height="520" rx="12" fill="#111" stroke="#222" stroke-width="1"/>
-  <text x="450" y="36" text-anchor="middle" fill="#ccc" font-size="20" font-weight="bold">OpenTrackFit — Architecture</text>
+  <text x="450" y="36" text-anchor="middle" fill="#ccc" font-size="20" font-weight="bold">OpenScale — Architecture</text>
 
   <!-- BLE Scale -->
   <rect x="30" y="70" width="160" height="100" rx="10" fill="#181818" stroke="#333" stroke-width="1.5"/>

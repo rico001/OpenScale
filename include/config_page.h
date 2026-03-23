@@ -7,7 +7,7 @@ const char CONFIG_PAGE[] PROGMEM = R"rawliteral(
 <!DOCTYPE html>
 <html><head>
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>OpenTrackFit Setup</title>
+<title>OpenScale Setup</title>
 <style>
   *{box-sizing:border-box}
   body{font-family:sans-serif;max-width:560px;margin:0 auto;padding:30px 20px;background:#111;color:#eee}
@@ -29,7 +29,7 @@ const char CONFIG_PAGE[] PROGMEM = R"rawliteral(
   .content{display:none}
 </style>
 </head><body>
-<h1>OpenTrackFit</h1>
+<h1>OpenScale</h1>
 <a class="home" href="/">zur Startseite</a>
 <div class="spinner-wrap" id="loader"><div class="spinner"></div></div>
 <div class="content" id="content">
@@ -78,7 +78,7 @@ const char CONFIG_PAGE[] PROGMEM = R"rawliteral(
     <label>Port</label>
     <input name="port" id="mqtt_port" placeholder="1883" type="number">
     <label>Topic</label>
-    <input name="topic" id="mqtt_topic" placeholder="opentrackfit/weight">
+    <input name="topic" id="mqtt_topic" placeholder="openscale/weight">
     <label>Benutzer (optional)</label>
     <input name="user" id="mqtt_user" placeholder="">
     <label>Passwort (optional)</label>

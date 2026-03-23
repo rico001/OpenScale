@@ -99,6 +99,16 @@ const char CONFIG_PAGE[] PROGMEM = R"rawliteral(
 </div>
 
 <div class="card">
+  <h2>History-App</h2>
+  <form action="/save/history-app" method="POST">
+    <label>URL zur History-App</label>
+    <input name="history_url" id="history_url" placeholder="https://example.com/history">
+    <button type="submit">Speichern</button>
+    <div class="msg" id="history-msg"></div>
+  </form>
+</div>
+
+<div class="card">
   <h2>REST API</h2>
   <p style="color:#999;font-size:14px;margin:0">Messdaten per API abrufen:</p>
   <a href="/api/last-weight-data" target="_blank" style="display:block;margin-top:10px;color:#4CAF50;font-size:15px;word-break:break-all">/api/last-weight-data</a>
@@ -167,6 +177,7 @@ function loadSettings(){
     if(d.mqtt_topic) document.getElementById('mqtt_topic').value=d.mqtt_topic;
     if(d.mqtt_user) document.getElementById('mqtt_user').value=d.mqtt_user;
     if(d.http_webhook) document.getElementById('http_webhook').value=d.http_webhook;
+    if(d.history_url) document.getElementById('history_url').value=d.history_url;
     renderProfiles(d.profiles||[]);
   }).catch(()=>{});
 }
@@ -202,11 +213,11 @@ function editProfile(name,g,a,h){
   document.getElementById('pf_height').value=h;
 }
 loadSettings();
-document.querySelectorAll('form[action="/save/mqtt"],form[action="/save/http"]').forEach(function(f){
+document.querySelectorAll('form[action="/save/mqtt"],form[action="/save/http"],form[action="/save/history-app"]').forEach(function(f){
   f.onsubmit=function(e){
     e.preventDefault();
     var fd=new FormData(f);
-    var id=f.action.includes('mqtt')?'mqtt-msg':'http-msg';
+    var id=f.action.includes('mqtt')?'mqtt-msg':f.action.includes('history')?'history-msg':'http-msg';
     api(f.action,{method:'POST',body:new URLSearchParams(fd)})
       .then(d=>{
         var m=document.getElementById(id);

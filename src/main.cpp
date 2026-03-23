@@ -101,6 +101,22 @@ void setPrefInt(const char* ns, const char* key, uint16_t val) {
     prefs.end();
 }
 
+void saveBodyData() {
+    prefs.begin("body", false);
+    prefs.putBytes("data", &bodyData, sizeof(bodyData));
+    prefs.end();
+}
+
+void loadBodyData() {
+    prefs.begin("body", true);
+    if (prefs.getBytesLength("data") == sizeof(bodyData)) {
+        prefs.getBytes("data", &bodyData, sizeof(bodyData));
+        if (bodyData.weight > 0)
+            Serial.printf("Restored last measurement: %.1f kg (%s)\n", bodyData.weight, bodyData.time);
+    }
+    prefs.end();
+}
+
 // --- Multi-Profile Storage ---
 // NVS namespace "prof", max 8 profiles
 // Keys: "count", "active", "n0".."n7" (name), "g0".."g7" (gender), "a0".."a7" (age), "h0".."h7" (height)
@@ -333,6 +349,7 @@ String buildBodyJson() {
 
 void forwardWeight(float weight, const char* time) {
     calculateBodyComposition(weight, time);
+    saveBodyData();
     String json = buildBodyJson();
 
     // MQTT
@@ -403,6 +420,7 @@ const char WEIGHT_PAGE[] PROGMEM = R"rawliteral(
 </style>
 </head><body>
 <h1>OpenTrackFit</h1>
+<div id="history-link" style="display:none;margin-top:4px"><a id="history-href" href="#" style="color:#888;font-size:clamp(13px,1.5vw,15px);text-decoration:none">zur History</a></div>
 <div id="profile-name" style="color:#888;font-size:clamp(14px,2vw,18px);margin-top:6px"></div>
 <div class="hero">
   <span class="val" id="weight">--.-</span> <span class="unit">kg</span>
@@ -479,6 +497,12 @@ function load(){
 }
 load();
 setInterval(load,5000);
+fetch('/api/settings').then(r=>r.json()).then(d=>{
+  if(d.history_url){
+    document.getElementById('history-href').href=d.history_url;
+    document.getElementById('history-link').style.display='block';
+  }
+}).catch(()=>{});
 </script>
 </body></html>
 )rawliteral";
@@ -601,6 +625,12 @@ void handleSaveHttp() {
     server.send(200, "application/json", "{\"ok\":true,\"message\":\"Webhook gespeichert.\"}");
 }
 
+void handleSaveHistory() {
+    setPref("http", "history", server.arg("history_url"));
+    Serial.println("History URL saved.");
+    server.send(200, "application/json", "{\"ok\":true,\"message\":\"History-App URL gespeichert.\"}");
+}
+
 void handleSaveProfile() {
     String name = server.arg("name");
     String age = server.arg("age");
@@ -697,6 +727,7 @@ void handleApiSettings() {
     json += ",\"mqtt_topic\":\"" + getPref("mqtt", "topic") + "\"";
     json += ",\"mqtt_user\":\"" + getPref("mqtt", "user") + "\"";
     json += ",\"http_webhook\":\"" + getPref("http", "webhook") + "\"";
+    json += ",\"history_url\":\"" + getPref("http", "history") + "\"";
     // Profiles
     int count = getProfileCount();
     int active = getActiveIndex();
@@ -758,6 +789,7 @@ void setupWebServer() {
     server.on("/save/wifi", HTTP_POST, handleSaveWifi);
     server.on("/save/mqtt", HTTP_POST, handleSaveMqtt);
     server.on("/save/http", HTTP_POST, handleSaveHttp);
+    server.on("/save/history-app", HTTP_POST, handleSaveHistory);
     server.on("/save/profile", HTTP_POST, handleSaveProfile);
     server.on("/delete/profile", HTTP_POST, handleDeleteProfile);
     server.on("/api/set-profile", HTTP_POST, handleSetActiveProfile);
@@ -928,6 +960,7 @@ void setup() {
     delay(1000);
     Serial.println("\n=== OpenTrackFit ===");
 
+    loadBodyData();
     setupBLE();
 
     if (connectWiFi()) {

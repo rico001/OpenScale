@@ -8,6 +8,10 @@ ESP32-based bridge that reads weight data from a Bluetooth (BLE) body compositio
 
 ## Supported Hardware
 
+| ESP32-WROOM-32 | FitTrack Dara Scale |
+|:---:|:---:|
+| <img src="resources/esp32.png" width="300"> | <img src="resources/fitTrack.png" width="300"> |
+
 - **Microcontroller**: ESP32-WROOM-32 (any ESP32 dev board)
 
 ### Compatible Scales

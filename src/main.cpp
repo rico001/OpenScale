@@ -703,11 +703,12 @@ void stopAP() {
 // --- Web Handlers ---
 
 void handleRoot() {
-    server.send(200, "text/html", currentMode == MODE_AP ? CONFIG_PAGE : WEIGHT_PAGE);
+    const char* page = currentMode == MODE_AP ? CONFIG_PAGE : WEIGHT_PAGE;
+    server.send_P(200, "text/html", page);
 }
 
 void handleSetup() {
-    server.send(200, "text/html", CONFIG_PAGE);
+    server.send_P(200, "text/html", CONFIG_PAGE);
 }
 
 void handleSaveWifi() {

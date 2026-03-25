@@ -100,6 +100,7 @@ const char CONFIG_PAGE[] PROGMEM = R"rawliteral(
     <label>Passwort (optional)</label>
     <input name="pass" id="mqtt_pass" type="password" placeholder="">
     <label style="display:flex;align-items:center;gap:8px;margin:10px 0"><input name="retain" id="mqtt_retain" type="checkbox" value="1" style="width:auto"> Retained Message</label>
+    <label style="display:flex;align-items:center;gap:8px;margin:10px 0"><input name="ha_discovery" id="mqtt_ha" type="checkbox" value="1" style="width:auto"> Home Assistant Auto-Discovery</label>
     <button type="submit">MQTT speichern</button>
     <div class="msg" id="mqtt-msg"></div>
   </form>
@@ -225,6 +226,7 @@ function loadSettings(){
     if(d.mqtt_topic) document.getElementById('mqtt_topic').value=d.mqtt_topic;
     if(d.mqtt_user) document.getElementById('mqtt_user').value=d.mqtt_user;
     if(d.mqtt_retain) document.getElementById('mqtt_retain').checked=true;
+    if(d.mqtt_ha_discovery) document.getElementById('mqtt_ha').checked=true;
     if(d.http_webhook) document.getElementById('http_webhook').value=d.http_webhook;
     if(d.history_url) document.getElementById('history_url').value=d.history_url;
     if(d.buzzer_pin) document.getElementById('buzzer_pin').value=d.buzzer_pin;

@@ -428,6 +428,55 @@ String buildBodyJson() {
     return j;
 }
 
+void publishHaDiscovery(const char* topic, const String& profile) {
+    // Build profile-specific identifiers (lowercase, no spaces)
+    String profLower = profile;
+    profLower.toLowerCase();
+    profLower.replace(" ", "_");
+    String nodeId = "openscale_" + profLower;  // e.g. openscale_peter
+    String devName = "OpenScale " + profile;   // e.g. "OpenScale Peter"
+    String dev = "\"dev\":{\"ids\":[\"" + nodeId + "\"],\"name\":\"" + devName + "\",\"mf\":\"OpenTrackFit\",\"mdl\":\"ESP32 BLE Scale\"}";
+    // State topic per profile: e.g. openscale/weight/peter
+    String stateTopic = String(topic) + "/" + profLower;
+    String stateTopicJson = "\"stat_t\":\"" + stateTopic + "\"";
+
+    struct HaSensor { const char* id; const char* name; const char* unit; const char* devClass; const char* tpl; };
+    HaSensor sensors[] = {
+        {"weight",       "Gewicht",          "kg",    "weight",      "{{ value_json.weight }}"},
+        {"bmi",          "BMI",              "kg/m²", nullptr,       "{{ value_json.bmi }}"},
+        {"bmr",          "Grundumsatz",      "kcal",  "energy",      "{{ value_json.bmr }}"},
+        {"metabolic_age","Stoffwechselalter","Jahre",  nullptr,       "{{ value_json.metabolic_age }}"},
+        {"visceral_fat", "Viszeralfett",     "",       nullptr,       "{{ value_json.visceral_fat }}"},
+        {"ideal_weight", "Idealgewicht",     "kg",    "weight",      "{{ value_json.ideal_weight }}"},
+        {"weight_control","Gewichtskontrolle","kg",   "weight",      "{{ value_json.weight_control }}"},
+        {"body_fat",     "Körperfett",       "%",      nullptr,       "{{ value_json.body_fat_pct }}"},
+        {"muscle",       "Muskelanteil",     "%",      nullptr,       "{{ value_json.muscle_pct }}"},
+        {"water",        "Wasseranteil",     "%",      nullptr,       "{{ value_json.water_pct }}"},
+        {"bone_mass",    "Knochenmasse",     "kg",    "weight",      "{{ value_json.bone_mass }}"},
+        {"protein",      "Protein",          "%",      nullptr,       "{{ value_json.protein_pct }}"},
+        {"subcut_fat",   "Unterhautfett",    "%",      nullptr,       "{{ value_json.subcutaneous_fat_pct }}"},
+        {"fat_mass",     "Fettmasse",        "kg",    "weight",      "{{ value_json.fat_mass }}"},
+        {"fat_free",     "Fettfreie Masse",  "kg",    "weight",      "{{ value_json.fat_free_weight }}"},
+        {"muscle_mass",  "Muskelmasse",      "kg",    "weight",      "{{ value_json.muscle_mass }}"},
+        {"protein_mass", "Proteinmasse",     "kg",    "weight",      "{{ value_json.protein_mass }}"},
+        {"impedance",    "Impedanz",         "Ω",     nullptr,       "{{ value_json.impedance }}"},
+    };
+
+    for (auto& s : sensors) {
+        String configTopic = "homeassistant/sensor/" + nodeId + "/" + String(s.id) + "/config";
+        String payload = "{\"name\":\"" + String(s.name) + "\""
+            ",\"uniq_id\":\"" + nodeId + "_" + String(s.id) + "\""
+            "," + stateTopicJson +
+            ",\"val_tpl\":\"" + String(s.tpl) + "\""
+            ",\"unit_of_meas\":\"" + String(s.unit) + "\""
+            ",\"stat_cla\":\"measurement\"";
+        if (s.devClass) payload += ",\"dev_cla\":\"" + String(s.devClass) + "\"";
+        payload += "," + dev + "}";
+        mqttClient.publish(configTopic.c_str(), payload.c_str(), true);
+    }
+    Serial.printf("HA Discovery published for profile: %s\n", profile.c_str());
+}
+
 void forwardWeight(float weight, const char* time) {
     beep();
     autoSelectProfile(weight);
@@ -446,7 +495,7 @@ void forwardWeight(float weight, const char* time) {
 
         bool retain = getPrefInt("mqtt", "retain", 0) == 1;
         mqttClient.setServer(broker.c_str(), port);
-        mqttClient.setBufferSize(1024);
+        mqttClient.setBufferSize(2048);
         lastMqttOk = false;
         for (int attempt = 1; attempt <= 3; attempt++) {
             bool ok;
@@ -456,6 +505,17 @@ void forwardWeight(float weight, const char* time) {
                 ok = mqttClient.connect("OpenScale");
             }
             if (ok) {
+                bool haDiscovery = getPrefInt("mqtt", "ha", 0) == 1 && !activeProfileName.isEmpty();
+                if (haDiscovery) {
+                    publishHaDiscovery(topic.c_str(), activeProfileName);
+                    // Publish on profile-specific state topic
+                    String profLower = activeProfileName;
+                    profLower.toLowerCase();
+                    profLower.replace(" ", "_");
+                    String profTopic = topic + "/" + profLower;
+                    mqttClient.publish(profTopic.c_str(), json.c_str(), retain);
+                    Serial.printf("MQTT published to %s (HA)\n", profTopic.c_str());
+                }
                 if (mqttClient.publish(topic.c_str(), json.c_str(), retain)) {
                     Serial.printf("MQTT published to %s (%d bytes)\n", topic.c_str(), json.length());
                     lastMqttOk = true;
@@ -775,6 +835,7 @@ void handleSaveMqtt() {
     setPref("mqtt", "user", server.arg("user"));
     setPref("mqtt", "pass", server.arg("pass"));
     setPrefInt("mqtt", "retain", server.hasArg("retain") ? 1 : 0);
+    setPrefInt("mqtt", "ha", server.hasArg("ha_discovery") ? 1 : 0);
     Serial.println("MQTT settings saved.");
     server.send(200, "application/json", "{\"ok\":true,\"message\":\"MQTT Einstellungen gespeichert.\"}");
 }
@@ -928,6 +989,8 @@ void handleApiSettings() {
     json += ",\"mqtt_user\":\"" + getPref("mqtt", "user") + "\"";
     json += ",\"mqtt_retain\":";
     json += getPrefInt("mqtt", "retain", 0) ? "true" : "false";
+    json += ",\"mqtt_ha_discovery\":";
+    json += getPrefInt("mqtt", "ha", 0) ? "true" : "false";
     json += ",\"http_webhook\":\"" + getPref("http", "webhook") + "\"";
     json += ",\"history_url\":\"" + getPref("http", "history") + "\"";
     json += ",\"buzzer_pin\":" + String(getPrefInt("hw", "buzzer", 0));

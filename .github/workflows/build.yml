@@ -1,0 +1,54 @@
+name: Build Firmware
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install PlatformIO
+        run: pip install platformio
+
+      - name: Generate build info
+        run: echo "#define BUILD_TIME \"$(date -u '+%Y-%m-%d %H:%M:%S UTC')\"" > include/build_info.h
+
+      - name: Set firmware filename
+        run: |
+          if [ "${{ github.ref }}" = "refs/heads/main" ]; then
+            echo "FW_NAME=firmware-main.bin" >> $GITHUB_ENV
+          else
+            echo "FW_NAME=firmware-dev.bin" >> $GITHUB_ENV
+          fi
+
+      - name: Build firmware
+        run: pio run
+
+      - name: Rename firmware
+        run: cp .pio/build/esp32/firmware.bin "${{ env.FW_NAME }}"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.FW_NAME }}
+          path: ${{ env.FW_NAME }}
+
+      - name: Create Release
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: build-${{ github.run_number }}
+          name: Firmware Build #${{ github.run_number }}
+          files: ${{ env.FW_NAME }}
+          generate_release_notes: true

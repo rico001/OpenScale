@@ -189,7 +189,7 @@ function api(url,opts){
   return fetch(url,opts).then(r=>r.json()).finally(done);
 }
 // Initial load: settings first, then scan
-function loadScan(){api('/api/scan').then(d=>{
+function loadScan(){fetch('/api/scan').then(r=>r.json()).then(d=>{
   var sel=document.getElementById('ssid');
   var inp=document.getElementById('ssid_manual');
   var st=document.getElementById('scan-status');
@@ -239,6 +239,7 @@ function loadSettings(){
     document.getElementById('ap-rules').innerHTML='';
     apIdx=0;
     rules.forEach(function(r){addApRule(r.min,r.max,r.profile);});
+    loadScan();
   }).catch(()=>{});
 }
 function renderProfiles(profiles){
@@ -293,7 +294,7 @@ function toggleApFields(){
   document.getElementById('ap-add-rule').style.opacity=on?'1':'0.4';
 }
 document.getElementById('ap_enabled').onchange=toggleApFields;
-loadSettings();loadScan();
+loadSettings();
 document.getElementById('auto-profile-form').onsubmit=function(e){
   e.preventDefault();
   var fd=new FormData(this);

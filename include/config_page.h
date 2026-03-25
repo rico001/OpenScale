@@ -188,8 +188,8 @@ function api(url,opts){
   opts=opts||{};opts.signal=c.signal;
   return fetch(url,opts).then(r=>r.json()).finally(done);
 }
-// Initial load: scan + settings in parallel
-api('/api/scan').then(d=>{
+// Initial load: settings first, then scan
+function loadScan(){api('/api/scan').then(d=>{
   var sel=document.getElementById('ssid');
   var inp=document.getElementById('ssid_manual');
   var st=document.getElementById('scan-status');
@@ -217,7 +217,7 @@ api('/api/scan').then(d=>{
 }).catch(()=>{
   document.getElementById('scan-status').textContent='Scan fehlgeschlagen';
   document.getElementById('ssid_manual').required=true;
-});
+});}
 function loadSettings(){
   api('/api/settings').then(d=>{
     if(d.mqtt_broker) document.getElementById('mqtt_broker').value=d.mqtt_broker;
@@ -293,7 +293,7 @@ function toggleApFields(){
   document.getElementById('ap-add-rule').style.opacity=on?'1':'0.4';
 }
 document.getElementById('ap_enabled').onchange=toggleApFields;
-loadSettings();
+loadSettings();loadScan();
 document.getElementById('auto-profile-form').onsubmit=function(e){
   e.preventDefault();
   var fd=new FormData(this);

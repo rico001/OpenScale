@@ -188,8 +188,8 @@ function api(url,opts){
   opts=opts||{};opts.signal=c.signal;
   return fetch(url,opts).then(r=>r.json()).finally(done);
 }
-// Initial load: scan + settings in parallel
-api('/api/scan').then(d=>{
+// Initial load: settings first, then scan
+function loadScan(){fetch('/api/scan').then(r=>r.json()).then(d=>{
   var sel=document.getElementById('ssid');
   var inp=document.getElementById('ssid_manual');
   var st=document.getElementById('scan-status');
@@ -217,7 +217,7 @@ api('/api/scan').then(d=>{
 }).catch(()=>{
   document.getElementById('scan-status').textContent='Scan fehlgeschlagen';
   document.getElementById('ssid_manual').required=true;
-});
+});}
 function loadSettings(){
   api('/api/settings').then(d=>{
     if(d.mqtt_broker) document.getElementById('mqtt_broker').value=d.mqtt_broker;
@@ -239,6 +239,7 @@ function loadSettings(){
     document.getElementById('ap-rules').innerHTML='';
     apIdx=0;
     rules.forEach(function(r){addApRule(r.min,r.max,r.profile);});
+    loadScan();
   }).catch(()=>{});
 }
 function renderProfiles(profiles){

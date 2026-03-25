@@ -2,9 +2,15 @@
 
 ESP32-based bridge that reads weight data from a Bluetooth (BLE) body composition scale and makes it available via a local web interface, MQTT, and HTTP webhooks.
 
-| Home | Settings | Settings |
-|------|----------|----------|
-| ![Home Page](resources/home.png) | ![Settings Page](resources/settings.png) | ![Settings Page 2](resources/settings_2.png) |
+| Home | Settings 1 |
+|:---:|:---:|
+| Last Weight | Profiles |
+| ![Home - Last Weight](resources/home-last-weight.png) | ![Settings - Profiles](resources/settings-profile.png) |
+
+| Settings 2 | Settings 3 |
+|:---:|:---:|
+| Auto Profil | OTA Update |
+| ![Settings - Auto Profil](resources/settings-auto-profil.png) | ![Settings - OTA Update](resources/settings-ota.png) |
 
 ## Supported Hardware
 

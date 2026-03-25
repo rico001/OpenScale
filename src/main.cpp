@@ -649,8 +649,11 @@ function loadStatus(){
     si.innerHTML=parts.length?'<span class="sep">|</span> '+parts.join(' '):'';
   }).catch(setOffline);
 }
-load();loadStatus();
-setInterval(load,5000);setInterval(loadStatus,3000);
+var iv1,iv2;
+function startPolling(){if(!iv1){load();loadStatus();iv1=setInterval(load,5000);iv2=setInterval(loadStatus,3000);}}
+function stopPolling(){clearInterval(iv1);clearInterval(iv2);iv1=null;iv2=null;}
+document.addEventListener('visibilitychange',function(){document.hidden?stopPolling():startPolling();});
+startPolling();
 fetchT('/api/settings').then(r=>r.json()).then(d=>{
   if(d.history_url){
     document.getElementById('history-href').href=d.history_url;

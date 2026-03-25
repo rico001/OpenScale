@@ -5,6 +5,8 @@ on:
     branches: [main, develop]
   pull_request:
     branches: [main]
+  release:
+    types: [created]
 
 jobs:
   build:
@@ -26,7 +28,7 @@ jobs:
 
       - name: Set firmware filename
         run: |
-          if [ "${{ github.ref }}" = "refs/heads/main" ]; then
+          if [ "${{ github.event_name }}" = "release" ] || [ "${{ github.ref }}" = "refs/heads/main" ]; then
             echo "FW_NAME=firmware-main.bin" >> $GITHUB_ENV
           else
             echo "FW_NAME=firmware-dev.bin" >> $GITHUB_ENV
@@ -44,11 +46,9 @@ jobs:
           name: ${{ env.FW_NAME }}
           path: ${{ env.FW_NAME }}
 
-      - name: Create Release
-        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+      - name: Attach to Release
+        if: github.event_name == 'release'
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: build-${{ github.run_number }}
-          name: Firmware Build #${{ github.run_number }}
           files: ${{ env.FW_NAME }}
-          generate_release_notes: true
+

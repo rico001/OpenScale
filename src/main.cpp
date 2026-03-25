@@ -702,26 +702,13 @@ void stopAP() {
 
 // --- Web Handlers ---
 
-void sendLargeProgmem(const char* content) {
-    size_t len = strlen_P(content);
-    server.setContentLength(len);
-    server.send(200, "text/html", "");
-    const size_t CHUNK = 1024;
-    for (size_t i = 0; i < len; i += CHUNK) {
-        size_t n = min(CHUNK, len - i);
-        char buf[CHUNK + 1];
-        memcpy_P(buf, content + i, n);
-        buf[n] = 0;
-        server.sendContent(buf);
-    }
-}
-
 void handleRoot() {
-    sendLargeProgmem(currentMode == MODE_AP ? CONFIG_PAGE : WEIGHT_PAGE);
+    const char* page = currentMode == MODE_AP ? CONFIG_PAGE : WEIGHT_PAGE;
+    server.send_P(200, "text/html", page);
 }
 
 void handleSetup() {
-    sendLargeProgmem(CONFIG_PAGE);
+    server.send_P(200, "text/html", CONFIG_PAGE);
 }
 
 void handleSaveWifi() {
